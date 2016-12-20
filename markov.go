@@ -78,8 +78,8 @@ func NewChain(prefixLen int) *Chain {
 // Add increments the frequency count for a suffix following each
 // distinct tail of a prefix
 func (c *Chain) Add(p Prefix, s string) {
-	for i := 0; i < c.prefixLen; i++ {
-		if p[i] == "" && i < c.prefixLen - 1 {
+	for i := 0; i <= c.prefixLen; i++ {
+		if i < c.prefixLen && p[i] == "" {
 			continue
 		}
 		key := strings.Join(p[i:], " ")
@@ -107,7 +107,7 @@ func (c *Chain) Build(r io.Reader) {
 
 func (c *Chain) NextWord(p Prefix) string {
 	// Try each tail of the prefix, starting with the longest
-	for i := 0; i < c.prefixLen; i++ {
+	for i := 0; i <= c.prefixLen; i++ {
 		key := strings.Join(p[i:], " ")
 		if c.chain[key] == nil {
 			continue
