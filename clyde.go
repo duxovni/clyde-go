@@ -27,6 +27,8 @@ const sender = "clyde"
 const zsig = "Clyde"
 const maxLine = 70
 
+var chainFile = "clyde.json"
+
 var session *zephyr.Session
 var subs = []zephyr.Subscription{
 	{"", "clyde-dev", "*"},
@@ -82,6 +84,10 @@ func main() {
 
 	// Seed RNG
 	rand.Seed(time.Now().UnixNano())
+
+	// Load/create chain
+	chain = LoadChain(chainFile, prefixLen)
+	defer chain.Save(chainFile)
 
 	// Set up zephyr session
 	session, err = zephyr.DialSystemDefault()

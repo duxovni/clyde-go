@@ -40,11 +40,6 @@ and then create a new prefix by removing the first word from the prefix
 and appending the suffix (making the new prefix is "am a"). Repeat this process
 until we can't find any suffixes for the current prefix or we exceed the word
 limit. (The word limit is necessary as the chain table may contain cycles.)
-
-Our version of this program reads text from standard input, parsing it into a
-Markov chain, and writes generated text to standard output.
-The prefix and output lengths can be specified using the -prefix and -words
-flags on the command-line.
 */
 package main
 
@@ -54,15 +49,12 @@ import (
 	"io"
 	"math/rand"
 	"strings"
+	"encoding/json"
+	"os"
 )
 
-// Prefix is a Markov chain prefix of one or more words.
+// Prefix is a Markov chain prefix of one or more lowercase words.
 type Prefix []string
-
-// String returns the Prefix as a string (for use as a map key).
-func (p Prefix) String() string {
-	return strings.Join(p, " ")
-}
 
 // Shift removes the first word from the Prefix and appends the given word lowercased.
 func (p Prefix) Shift(word string) {
@@ -70,17 +62,32 @@ func (p Prefix) Shift(word string) {
 	p[len(p)-1] = strings.ToLower(word)
 }
 
-// Chain contains a map ("chain") of prefixes to a list of suffixes.
-// A prefix is a string of prefixLen words joined with spaces.
-// A suffix is a single word. A prefix can have multiple suffixes.
+// Chain contains a map ("chain") of prefixes to a map of suffixes to
+// frequencies.  A prefix is a string of zero to prefixLen lowercase
+// words joined with spaces.  A suffix is a single word.
 type Chain struct {
-	chain     map[string][]string
+	chain     map[string]map[string]int
 	prefixLen int
 }
 
 // NewChain returns a new Chain with prefixes of prefixLen words.
 func NewChain(prefixLen int) *Chain {
-	return &Chain{make(map[string][]string), prefixLen}
+	return &Chain{make(map[string]map[string]int), prefixLen}
+}
+
+// Add increments the frequency count for a suffix following each
+// distinct tail of a prefix
+func (c *Chain) Add(p Prefix, s string) {
+	for i := 0; i < c.prefixLen; i++ {
+		if p[i] == "" && i < c.prefixLen - 1 {
+			continue
+		}
+		key := strings.Join(p[i:], " ")
+		if c.chain[key] == nil {
+			c.chain[key] = make(map[string]int)
+		}
+		c.chain[key][s]++
+	}
 }
 
 // Build reads text from the provided Reader and
@@ -93,10 +100,36 @@ func (c *Chain) Build(r io.Reader) {
 		if _, err := fmt.Fscan(br, &s); err != nil {
 			break
 		}
-		key := p.String()
-		c.chain[key] = append(c.chain[key], s)
+		c.Add(p, s)
 		p.Shift(s)
 	}
+}
+
+func (c *Chain) NextWord(p Prefix) string {
+	// Try each tail of the prefix, starting with the longest
+	for i := 0; i < c.prefixLen; i++ {
+		key := strings.Join(p[i:], " ")
+		if c.chain[key] == nil {
+			continue
+		}
+
+		// Make a random choice weighted by frequency
+		total := 0
+		for _, freq := range c.chain[key] {
+			total += freq
+		}
+		if total == 0 {
+			continue
+		}
+		n := rand.Intn(total)
+		for w, freq := range c.chain[key] {
+			n -= freq
+			if n <= 0 {
+				return w
+			}
+		}
+	}
+	return ""
 }
 
 // Generate returns a string of at most n words generated from Chain.
@@ -111,13 +144,42 @@ func (c *Chain) Generate(start string, n int) string {
 		p.Shift(w)
 	}
 	for i := 0; i < n; i++ {
-		choices := c.chain[p.String()]
-		if len(choices) == 0 {
+		next := c.NextWord(p)
+		if len(next) == 0 {
 			break
 		}
-		next := choices[rand.Intn(len(choices))]
 		words = append(words, next)
 		p.Shift(next)
 	}
 	return strings.Join(words, " ")
+}
+
+// Save saves a chain's suffix frequency map to the given file in JSON
+// format
+func (c *Chain) Save(filename string) {
+	f, err := os.Create(filename)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	enc := json.NewEncoder(f)
+	err = enc.Encode(c.chain)
+}
+
+// LoadChain loads a suffix frequency map in JSON format from the
+// given file if the file exists, and returns a new chain with the
+// given prefix length and the loaded frequency map, or an empty map
+// if loading failed.
+func LoadChain(filename string, prefixLen int) *Chain {
+	c := NewChain(prefixLen)
+
+	f, err := os.Open(filename)
+	if err == nil {
+		defer f.Close()
+		dec := json.NewDecoder(f)
+		dec.Decode(&c.chain)
+	}
+
+	return c
 }

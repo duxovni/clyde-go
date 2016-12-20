@@ -15,7 +15,7 @@ import (
 
 const prefixLen = 2
 const genWords = 20
-var chain = NewChain(prefixLen)
+var chain *Chain
 
 type Behavior func(string) string
 
