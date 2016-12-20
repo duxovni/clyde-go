@@ -1,4 +1,6 @@
-// Copyright 2016 Sam Dukhovni
+// Copyright 2016 Sam Dukhovni <dukhovni@mit.edu>
+//
+// Adapted from clyde.pl by cat@mit.edu
 //
 // Licensed under the MIT License
 // (https://opensource.org/licenses/MIT)
@@ -16,13 +18,16 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"math/rand"
 	"github.com/zephyr-im/krb5-go"
 	"github.com/zephyr-im/zephyr-go"
 )
 
+const sender = "clyde"
+const zsig = "Clyde"
+const maxLine = 70
+
 var session *zephyr.Session
-var sender = "clyde"
-var zsig = "Clyde"
 var subs = []zephyr.Subscription{
 	{"", "clyde-dev", "*"},
 }
@@ -57,37 +62,51 @@ func send(class, instance, body string) {
 }
 
 func handleMessage(auth zephyr.AuthStatus, msg *zephyr.Message) {
+	// Ignore our own messages
 	if msg.Header.Sender == sender {
 		return
 	}
 
-	send(msg.Header.Class, msg.Header.Instance, "hi!")
+	// Perform the first behavior that triggers, and exit
+	for _, b := range Behaviors {
+		reply := b(msg.Body[1])
+		if reply != "" {
+			send(msg.Header.Class, msg.Header.Instance, BreakLines(reply, maxLine))
+			return
+		}
+	}
 }
 
 func main() {
 	var err error
 
+	// Seed RNG
+	rand.Seed(time.Now().UnixNano())
+
+	// Set up zephyr session
 	session, err = zephyr.DialSystemDefault()
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer session.Close()
 
+	// Start goroutine to read and reply to messages
 	go func() {
 		for r := range session.Messages() {
 			handleMessage(r.AuthStatus, r.Message)
 		}
 	}()
 
+	// Subscribe to classes
 	log.Printf("Subscribing to %v", subs)
 	ctx, err := krb5.NewContext()
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer ctx.Free()
-
 	ack, err := session.SendSubscribeNoDefaults(ctx, subs)
 	log.Printf(" -> %v %v", ack, err)
+	// Cancel subs when we're done
 	defer func() {
 		log.Printf("Canceling subs")
 		ack, err := session.SendCancelSubscriptions(ctx)
