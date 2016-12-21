@@ -65,7 +65,7 @@ func LoadClyde(dir string) (*Clyde, error) {
 
 	// Create markov chain, and try to load saved chain
 	c.Chain = markov.NewChain(prefixLen)
-	err = c.Chain.Load(c.path(chainFile))
+	err = c.Chain.Load(c.Path(chainFile))
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func (c *Clyde) Send(class, instance, body string) {
 func (c *Clyde) Shutdown() error {
 	var err error
 
-	err = c.Chain.Save(c.path(chainFile))
+	err = c.Chain.Save(c.Path(chainFile))
 	if err != nil {
 		return err
 	}
@@ -140,18 +140,17 @@ func (c *Clyde) Shutdown() error {
 	return nil
 }
 
+func (c *Clyde) Path(filename string) string {
+	return path.Join(c.homeDir, filename)
+}
+
 
 const chainFile = "chain.json"
 
 const sender = "clyde"
 const zsig = "Clyde"
-const maxLine = 70
 const prefixLen = 2
 
-
-func (c *Clyde) path(filename string) string {
-	return path.Join(c.homeDir, filename)
-}
 
 func (c *Clyde) handleMessage(r zephyr.MessageReaderResult) {
 	// Ignore our own messages

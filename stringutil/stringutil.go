@@ -2,10 +2,14 @@
 //
 // Licensed under the MIT License
 // (https://opensource.org/licenses/MIT)
+//
+// stringutil contains miscellaneous string-manipulating functions
+// useful for clyde-go.
 
 package stringutil
 
 import (
+	"fmt"
 	"strings"
 	"unicode/utf8"
 	"regexp"
@@ -36,4 +40,27 @@ func BreakLines(s string, maxLine int) string {
 
 var endOfSentence = regexp.MustCompile("[\\.\\?!]['\"]?$")
 
+// IsEndOfSentence returns a boolean indicating whether a word ends
+// with sentence-ending punctuation marks.
 var IsEndOfSentence = endOfSentence.MatchString
+
+var vowelStart = regexp.MustCompile("^[aeiou]")
+
+// Article returns the appropriate indefinite article for a noun.
+func Article(w string) string {
+	if vowelStart.MatchString(w) {
+		return "an"
+	} else {
+		return "a"
+	}
+}
+
+// Capitalize returns its input with the first letter uppercased.
+func Capitalize(w string) string {
+	parts := strings.SplitN(w, "", 2)
+	if len(parts) < 2 {
+		return strings.ToUpper(w)
+	} else {
+		return fmt.Sprint(strings.ToUpper(parts[0]), parts[1])
+	}
+}

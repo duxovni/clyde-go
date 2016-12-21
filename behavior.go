@@ -12,10 +12,13 @@
 package clyde
 
 import (
+	"log"
 	"fmt"
 	"strings"
 	"regexp"
 	"math/rand"
+	"bufio"
+	"os"
 	"github.com/zephyr-im/zephyr-go"
 	"github.com/sdukhovni/clyde-go/stringutil"
 )
@@ -58,12 +61,6 @@ func StandardBehavior(pattern string, keys []string, chain bool, resp func(*Clyd
 	}
 }
 
-// Behaviors is a list of behaviors to be attempted in the order
-// given.
-var Behaviors = []Behavior{
-	fight,
-}
-
 // maxWords is the maximum number of words that a behavior should
 // generate using the markov chainer.
 const maxWords = 100
@@ -72,6 +69,72 @@ const maxWords = 100
 // chainer; a number is chosen randomly from this list each time a
 // number of sentences is needed.
 var sentenceCounts = []int{1, 1, 1, 2, 2, 3}
+
+// randomLine returns a random non-empty line from a file in Clyde's
+// home directory.
+func randomLine(c *Clyde, filename string) (string, error) {
+	filepath := c.Path(filename)
+
+	f, err := os.Open(filepath)
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+	defer f.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+
+	return lines[rand.Intn(len(lines))], nil
+}
+
+// addLine adds a line to a file in Clyde's home directory.
+func addLine(c *Clyde, filename, line string) error {
+	filepath := c.Path(filename)
+
+	f, err := os.OpenFile(filepath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	defer f.Close()
+
+	fmt.Fprintln(f, line)
+	return nil
+}
+
+
+// Behaviors is a list of behaviors to be attempted in the order
+// given.
+var Behaviors = []Behavior{
+	learnJob,
+	story,
+	fight,
+	chat,
+}
+
+var learnJob = StandardBehavior("clyde.? (?P<job>.+) is an? (job|profession|occupation)",
+	[]string{"job"},
+	false,
+	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
+		addLine(c, "jobs", kvs["job"])
+		return "That's what I wanna be when I grow up!"
+	})
+
+var story = StandardBehavior("tell me a story",
+	nil,
+	true,
+	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
+		job, _ := randomLine(c, "jobs")
+		sender := strings.Split(r.Message.Header.Sender, "@")[0]
+		return fmt.Sprintf("Once upon a time, there was %s %s named %s who", stringutil.Article(job), job, sender)
+	})
 
 var fight = StandardBehavior("if (?P<fight1>.+) and (?P<fight2>.+) (fought|got in|were in|had)|between (?P<fight1>.+) and (?P<fight2>.+[^,\\?])(,|\\?|$| who| which| what)",
 	[]string{"fight1", "fight2"},
@@ -85,4 +148,11 @@ var fight = StandardBehavior("if (?P<fight1>.+) and (?P<fight2>.+) (fought|got i
 			winner = "fight2"
 		}
 		return fmt.Sprintf("I think %s would win, because", kvs[winner])
+	})
+
+var chat = StandardBehavior("clyde, (?P<topic>[^ ]+)",
+	[]string{"topic"},
+	true,
+	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
+		return stringutil.Capitalize(kvs["topic"])
 	})
