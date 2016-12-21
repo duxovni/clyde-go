@@ -136,7 +136,7 @@ var story = StandardBehavior("tell me a story",
 		return fmt.Sprintf("Once upon a time, there was %s %s named %s who", stringutil.Article(job), job, sender)
 	})
 
-var fight = StandardBehavior("if (?P<fight1>.+) and (?P<fight2>.+) (fought|got in|were in|had)|between (?P<fight1>.+) and (?P<fight2>.+[^,\\?])(,|\\?|$| who| which| what)",
+var fight = StandardBehavior("if (?P<fight1>.+) and (?P<fight2>.+) (fought|duell?ed|got in|were in|had)|(who|which|what) .* between (?P<fight1>.+) and (?P<fight2>.+[^,\\?])(\\?|$)|between (?P<fight1>.+) and (?P<fight2>.+[^,\\?]),? (who|which|what)",
 	[]string{"fight1", "fight2"},
 	true,
 	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
