@@ -1,4 +1,4 @@
-* clyde
+# clyde
 
 Clyde is a Markov chain chatbot created by cat@mit.edu.  He's been a
 beloved presence on MIT Zephyr for ~20 years, amusing and delighting
@@ -10,12 +10,12 @@ development easier, and get my feet wet in Go.
 `clyde-go` is currently under heavy development, and isn't really a
 functional chatbot quite yet.
 
-** Instructions
+## Instructions
 
-*** Installation
+### Installation
 
     $ go get github.com/sdukhovni/clyde-go/cmd/clyde
 
-*** Usage
+### Usage
 
     $ $GOPATH/bin/clyde
