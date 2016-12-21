@@ -54,8 +54,18 @@ import (
 	"github.com/sdukhovni/clyde-go/stringutil"
 )
 
-// Prefix is a Markov chain prefix of one or more lowercase words.
+// Prefix is a Markov chain prefix of one or more lowercase words. It
+// may begin with some number of empty strings followed by the string
+// "START" in all-caps, to indicate the start of a block of
+// input/output text.
 type Prefix []string
+
+// NewPrefix creates a new Prefix ending with the "START" symbol.
+func NewPrefix(prefixLen int) (Prefix) {
+	p := make([]string, prefixLen)
+	p[prefixLen-1] = "START"
+	return p
+}
 
 // Shift removes the first word from the Prefix and appends the given word lowercased.
 func (p Prefix) Shift(word string) {
@@ -95,7 +105,7 @@ func (c *Chain) Add(p Prefix, s string) {
 // parses it into prefixes and suffixes that are stored in Chain.
 func (c *Chain) Build(r io.Reader) {
 	br := bufio.NewReader(r)
-	p := make(Prefix, c.prefixLen)
+	p := NewPrefix(c.prefixLen)
 	for {
 		var s string
 		if _, err := fmt.Fscan(br, &s); err != nil {
@@ -143,7 +153,7 @@ func (c *Chain) NextWord(p Prefix) string {
 // chain produces no sentence endings within the word limit.
 func (c *Chain) Generate(start string, sentences, maxWords int) string {
 	words := strings.Fields(start)
-	p := make(Prefix, c.prefixLen)
+	p := NewPrefix(c.prefixLen)
 	lastWordsStart := len(words) - c.prefixLen
 	if lastWordsStart < 0 {
 		lastWordsStart = 0
