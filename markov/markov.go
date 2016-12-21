@@ -135,12 +135,26 @@ func (c *Chain) NextWord(p Prefix) string {
 			continue
 		}
 		n := rand.Intn(total)
+		var result string
 		for w, freq := range c.chain[key] {
 			n -= freq
 			if n <= 0 {
-				return w
+				result = w
+				break
 			}
 		}
+
+		// If we're making an uninformed choice because we
+		// don't recognize the tail word, at least try to get
+		// capitalization right.
+		if key == "" {
+			if stringutil.IsEndOfSentence(p[c.prefixLen-1]) {
+				result = stringutil.Capitalize(result)
+			} else {
+				result = strings.ToLower(result)
+			}
+		}
+		return result
 	}
 	return ""
 }
