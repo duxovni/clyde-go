@@ -159,13 +159,12 @@ func (c *Clyde) handleMessage(r zephyr.MessageReaderResult) {
 		return
 	}
 
+	c.Chain.Build(strings.NewReader(r.Message.Body[1]))
+
 	// Perform the first behavior that triggers, and exit
 	for _, b := range Behaviors {
 		if b(c, r) {
 			return
 		}
 	}
-
-	// If it isn't a behavior trigger, add it to the chainer
-	c.Chain.Build(strings.NewReader(r.Message.Body[1]))
 }
