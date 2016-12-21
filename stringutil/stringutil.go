@@ -8,6 +8,7 @@ package stringutil
 import (
 	"strings"
 	"unicode/utf8"
+	"regexp"
 )
 
 const MaxLine = 70
@@ -32,3 +33,7 @@ func BreakLines(s string, maxLine int) string {
 
 	return strings.Join(lines, "\n")
 }
+
+var endOfSentence = regexp.MustCompile("[\\.\\?!]['\"]?$")
+
+var IsEndOfSentence = endOfSentence.MatchString

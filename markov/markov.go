@@ -51,6 +51,7 @@ import (
 	"strings"
 	"encoding/json"
 	"os"
+	"github.com/sdukhovni/clyde-go/stringutil"
 )
 
 // Prefix is a Markov chain prefix of one or more lowercase words.
@@ -134,8 +135,13 @@ func (c *Chain) NextWord(p Prefix) string {
 	return ""
 }
 
-// Generate returns a string of at most n words generated from Chain.
-func (c *Chain) Generate(start string, n int) string {
+// Generate returns a string of at most maxWords words (in addition to
+// any words in the start string) generated from Chain.  It attempts
+// to generate exactly the requested number of sentences, but may
+// generate fewer if the chain doesn't produce enough
+// sentence-endings, or may generate a single sentence fragment if the
+// chain produces no sentence endings within the word limit.
+func (c *Chain) Generate(start string, sentences, maxWords int) string {
 	words := strings.Fields(start)
 	p := make(Prefix, c.prefixLen)
 	lastWordsStart := len(words) - c.prefixLen
@@ -145,13 +151,23 @@ func (c *Chain) Generate(start string, n int) string {
 	for _,w := range words[lastWordsStart:] {
 		p.Shift(w)
 	}
-	for i := 0; i < n; i++ {
+
+	sentenceCount := 0
+	sentenceEndIndex := 0
+	for i := 0; i < maxWords && sentenceCount < sentences; i++ {
 		next := c.NextWord(p)
 		if len(next) == 0 {
 			break
 		}
 		words = append(words, next)
 		p.Shift(next)
+		if stringutil.IsEndOfSentence(next) {
+			sentenceCount++
+			sentenceEndIndex = len(words)
+		}
+	}
+	if sentenceCount < sentences && sentenceEndIndex > 0 {
+		words = words[:sentenceEndIndex]
 	}
 	return strings.Join(words, " ")
 }
