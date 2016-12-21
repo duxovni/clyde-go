@@ -13,6 +13,7 @@ package clyde
 
 import (
 	"fmt"
+	"strings"
 	"regexp"
 	"math/rand"
 	"github.com/zephyr-im/zephyr-go"
@@ -34,7 +35,7 @@ type Behavior func(*Clyde, zephyr.MessageReaderResult) bool
 // class and instance as the incoming zephyr.
 func StandardBehavior(pattern string, keys []string, chain bool, resp func(*Clyde, zephyr.MessageReaderResult, map[string]string) string) Behavior {
 	return func(c *Clyde, r zephyr.MessageReaderResult) bool {
-		body := r.Message.Body[1]
+		body := strings.Join(strings.Fields(r.Message.Body[1]), " ") // normalize spacing for regexp matches
 		insPattern := fmt.Sprint("(?i)", pattern)
 		rex := regexp.MustCompile(insPattern)
 		match := rex.FindStringSubmatchIndex(body)
