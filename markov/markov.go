@@ -41,7 +41,7 @@ and appending the suffix (making the new prefix is "am a"). Repeat this process
 until we can't find any suffixes for the current prefix or we exceed the word
 limit. (The word limit is necessary as the chain table may contain cycles.)
 */
-package main
+package markov
 
 import (
 	"bufio"
@@ -105,6 +105,8 @@ func (c *Chain) Build(r io.Reader) {
 	}
 }
 
+// NextWord randomly chooses a word to follow the given prefix, using
+// the weights provided by Chain.
 func (c *Chain) NextWord(p Prefix) string {
 	// Try each tail of the prefix, starting with the longest
 	for i := 0; i <= c.prefixLen; i++ {
@@ -154,32 +156,39 @@ func (c *Chain) Generate(start string, n int) string {
 	return strings.Join(words, " ")
 }
 
+// Load attempts to load a suffix frequency map in JSON format from
+// the given file to use in Chain.
+func (c *Chain) Load(filename string) error {
+	f, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	dec := json.NewDecoder(f)
+	err = dec.Decode(&(c.chain))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Save saves a chain's suffix frequency map to the given file in JSON
 // format
-func (c *Chain) Save(filename string) {
+func (c *Chain) Save(filename string) error {
 	f, err := os.Create(filename)
 	if err != nil {
-		return
+		return err
 	}
 	defer f.Close()
 
 	enc := json.NewEncoder(f)
 	err = enc.Encode(c.chain)
-}
-
-// LoadChain loads a suffix frequency map in JSON format from the
-// given file if the file exists, and returns a new chain with the
-// given prefix length and the loaded frequency map, or an empty map
-// if loading failed.
-func LoadChain(filename string, prefixLen int) *Chain {
-	c := NewChain(prefixLen)
-
-	f, err := os.Open(filename)
-	if err == nil {
-		defer f.Close()
-		dec := json.NewDecoder(f)
-		dec.Decode(&c.chain)
+	if err != nil {
+		return err
 	}
 
-	return c
+	return nil
 }
+

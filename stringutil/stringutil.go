@@ -3,12 +3,14 @@
 // Licensed under the MIT License
 // (https://opensource.org/licenses/MIT)
 
-package main
+package stringutil
 
 import (
 	"strings"
 	"unicode/utf8"
 )
+
+const MaxLine = 70
 
 func BreakLines(s string, maxLine int) string {
 	words := strings.Fields(s)
