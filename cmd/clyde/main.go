@@ -16,13 +16,9 @@ import (
 	"os/signal"
 	"syscall"
 	"math/rand"
-	"github.com/zephyr-im/zephyr-go"
 	"github.com/sdukhovni/clyde-go"
 )
 
-var subs = []zephyr.Subscription{
-	{"", "clyde-dev", "*"},
-}
 func main() {
 	// Seed RNG
 	rand.Seed(time.Now().UnixNano())
@@ -43,9 +39,6 @@ func main() {
 
 	// Start Clyde's listener goroutine
 	go clyde.Listen()
-
-	// Subscribe to classes
-	clyde.Subscribe(subs)
 
 	// Keep listening until a SIGINT or SIGTERM.
 	c := make(chan os.Signal, 1)

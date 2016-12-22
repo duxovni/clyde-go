@@ -22,9 +22,18 @@ import (
 	"time"
 	"path"
 	"os"
+	"encoding/json"
 	"github.com/zephyr-im/krb5-go"
 	"github.com/zephyr-im/zephyr-go"
 	"github.com/sdukhovni/clyde-go/markov"
+)
+
+type ClassPolicy uint8
+
+const (
+	LISTEN ClassPolicy = 1
+	REPLYHOME ClassPolicy = 2
+	FULL ClassPolicy = 3
 )
 
 // Clyde (the struct) holds all of the internal state needed for Clyde
@@ -35,7 +44,7 @@ type Clyde struct {
 	homeDir string
 	session *zephyr.Session
 	ctx *krb5.Context
-	subs []zephyr.Subscription
+	subs map[string]ClassPolicy
 }
 
 // LoadClyde initializes a Clyde by loading data files found in the
@@ -70,6 +79,13 @@ func LoadClyde(dir string) (*Clyde, error) {
 		return nil, err
 	}
 
+	c.session.SendSubscribeNoDefaults(c.ctx, []zephyr.Subscription{{Class: homeClass, Instance: homeInstance, Recipient: ""}})
+	c.subs = make(map[string]ClassPolicy)
+	err = c.LoadSubs()
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+
 	return c, nil
 }
 
@@ -81,11 +97,13 @@ func (c *Clyde) Listen() {
 	}
 }
 
-// Subscribe subscribes Clyde to the given list of zephyr
-// subscriptions.
-func (c *Clyde) Subscribe(subs []zephyr.Subscription) {
-	c.session.SendSubscribeNoDefaults(c.ctx, subs)
-	c.subs = append(c.subs, subs...)
+// Subscribe subscribes Clyde to a new zephyr class.
+func (c *Clyde) Subscribe(class string, policy ClassPolicy) {
+	if c.subs[class] != 0 {
+		return
+	}
+	c.session.SendSubscribeNoDefaults(c.ctx, []zephyr.Subscription{{Class: class, Instance: "*", Recipient: ""}})
+	c.subs[class] = policy
 }
 
 // Send sends a zephyr from Clyde with the given body to the given
@@ -125,6 +143,11 @@ func (c *Clyde) Shutdown() error {
 		return err
 	}
 
+	err = c.SaveSubs()
+	if err != nil {
+		return err
+	}
+
 	_, err = c.session.SendCancelSubscriptions(c.ctx)
 	if err != nil {
 		return err
@@ -145,7 +168,11 @@ func (c *Clyde) Path(filename string) string {
 }
 
 
+const homeClass = "ztoys-dev"
+const homeInstance = "clyde"
+
 const chainFile = "chain.json"
+const subsFile = "subs.json"
 
 const sender = "clyde"
 const zsig = "Clyde"
@@ -166,4 +193,50 @@ func (c *Clyde) handleMessage(r zephyr.MessageReaderResult) {
 			return
 		}
 	}
+}
+
+
+// LoadSubs attempts to load and subscribe to a list of subscriptions
+// in JSON format from a file in Clyde's home directory.
+func (c *Clyde) LoadSubs() error {
+	f, err := os.Open(c.Path(subsFile))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	dec := json.NewDecoder(f)
+	err = dec.Decode(&(c.subs))
+	if err != nil {
+		return err
+	}
+
+	var subList []zephyr.Subscription
+	for class, policy := range c.subs {
+		if policy != 0 {
+			subList = append(subList, zephyr.Subscription{Class: class, Instance: "*", Recipient: ""})
+		}
+	}
+
+	c.session.SendSubscribeNoDefaults(c.ctx, subList)
+
+	return nil
+}
+
+// SaveSubs saves Clyde's subscriptions to a file in JSON format in
+// Clyde's home directory.
+func (c *Clyde) SaveSubs() error {
+	f, err := os.Create(c.Path(subsFile))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	enc := json.NewEncoder(f)
+	err = enc.Encode(c.subs)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

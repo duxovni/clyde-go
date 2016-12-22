@@ -34,8 +34,9 @@ type Behavior func(*Clyde, zephyr.MessageReaderResult) bool
 // of triggering based on a case-insensitive regular expression in a
 // zephyr body, reading some named capturing groups from the regexp
 // match, possibly performing some action, and replying with a single
-// zephyr (possibly generated using the markov chainer) on the same
-// class and instance as the incoming zephyr.
+// zephyr (possibly generated using the markov chainer) either on the
+// same class and instance as the incoming zephyr or on Clyde's home
+// class.
 func StandardBehavior(pattern string, keys []string, chain bool, resp func(*Clyde, zephyr.MessageReaderResult, map[string]string) string) Behavior {
 	return func(c *Clyde, r zephyr.MessageReaderResult) bool {
 		body := strings.Join(strings.Fields(r.Message.Body[1]), " ") // normalize spacing for regexp matches
@@ -55,7 +56,22 @@ func StandardBehavior(pattern string, keys []string, chain bool, resp func(*Clyd
 		if chain {
 			response = c.Chain.Generate(response, sentenceCounts[rand.Intn(len(sentenceCounts))], maxWords)
 		}
-		c.Send(r.Message.Header.Class, r.Message.Header.Instance, stringutil.BreakLines(response, stringutil.MaxLine))
+
+		class := r.Message.Header.Class
+		instance := r.Message.Header.Instance
+		if class != homeClass || instance != homeInstance {
+			switch c.subs[class] {
+			case 0, LISTEN:
+				return true
+			case REPLYHOME:
+				if !strings.Contains(strings.ToLower(r.Message.Body[1]), "clyde") {
+					class = homeClass
+					instance = homeInstance
+				}
+			}
+		}
+
+		c.Send(class, instance, stringutil.BreakLines(response, stringutil.MaxLine))
 
 		return true
 	}
@@ -70,15 +86,21 @@ const maxWords = 100
 // number of sentences is needed.
 var sentenceCounts = []int{1, 1, 1, 2, 2, 3}
 
-// randomLine returns a random non-empty line from a file in Clyde's
+// shortSender returns just the kerberos principal (with no realm) of
+// the sender of a zephyr.
+func shortSender(r zephyr.MessageReaderResult) string {
+	return strings.Split(r.Message.Header.Sender, "@")[0]
+}
+
+// allLines returns a list of non-empty lines in a file in Clyde's
 // home directory.
-func randomLine(c *Clyde, filename string) (string, error) {
+func allLines(c *Clyde, filename string) ([]string, error) {
 	filepath := c.Path(filename)
 
 	f, err := os.Open(filepath)
 	if err != nil {
 		log.Println(err)
-		return "", err
+		return nil, err
 	}
 	defer f.Close()
 
@@ -91,6 +113,16 @@ func randomLine(c *Clyde, filename string) (string, error) {
 		}
 	}
 
+	return lines, nil
+}
+
+// randomLine returns a random non-empty line from a file in Clyde's
+// home directory.
+func randomLine(c *Clyde, filename string) (string, error) {
+	lines, err := allLines(c, filename)
+	if err != nil {
+		return "", nil
+	}
 	return lines[rand.Intn(len(lines))], nil
 }
 
@@ -113,11 +145,54 @@ func addLine(c *Clyde, filename, line string) error {
 // Behaviors is a list of behaviors to be attempted in the order
 // given.
 var Behaviors = []Behavior{
+	addSub,
+	checkSub,
 	learnJob,
 	story,
 	fight,
 	chat,
 }
+
+var addSub = StandardBehavior("clyde.*sub(scribe)? to (me|my class|(-c )?(?P<class>[^ !\\?]+[^ !\\?\\.]))",
+	[]string{"class"},
+	false,
+	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
+		class := kvs["class"]
+		if class == "" {
+			class = shortSender(r)
+		}
+
+		if r.Message.Header.Class != homeClass || r.Message.Header.Instance != homeInstance {
+			return "I'm subbed to a lot of classes right now; maybe another time..."
+		}
+
+		if c.subs[class] != 0 {
+			return fmt.Sprintf("I'm already subbed to -c %s!", class)
+		}
+
+		if r.AuthStatus != zephyr.AuthYes {
+			return "You look sketchy, I don't trust you..."
+		}
+
+		c.Subscribe(class, REPLYHOME)
+		return fmt.Sprintf("-c %s sounds awesome! Thanks for the invitation :)", class)
+	})
+
+var checkSub = StandardBehavior("are you (on|sub(scri)?bed to) (me|my class|(-c )?(?P<class>[^ !\\?]+[^ !\\?\\.]))",
+	[]string{"class"},
+	false,
+	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
+		class := kvs["class"]
+		if class == "" {
+			class = shortSender(r)
+		}
+
+		if c.subs[class] == 0 {
+			return fmt.Sprintf("I'm not subbed to -c %s.", class)
+		} else {
+			return fmt.Sprintf("Yup, I'm subbed to -c %s! It's my favorite class :)", class)
+		}
+	})
 
 var learnJob = StandardBehavior("clyde.? (?P<job>.+) is an? (job|profession|occupation)",
 	[]string{"job"},
@@ -132,8 +207,7 @@ var story = StandardBehavior("tell me a story",
 	true,
 	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
 		job, _ := randomLine(c, "jobs")
-		sender := strings.Split(r.Message.Header.Sender, "@")[0]
-		return fmt.Sprintf("Once upon a time, there was %s %s named %s who", stringutil.Article(job), job, sender)
+		return fmt.Sprintf("Once upon a time, there was %s %s named %s who", stringutil.Article(job), job, shortSender(r))
 	})
 
 var fight = StandardBehavior("if (?P<fight1>.+) and (?P<fight2>.+) (fought|duell?ed|got in|were in|had)|(who|which|what) .* between (?P<fight1>.+) and (?P<fight2>.+[^,\\?])(\\?|$)|between (?P<fight1>.+) and (?P<fight2>.+[^,\\?]),? (who|which|what)",
