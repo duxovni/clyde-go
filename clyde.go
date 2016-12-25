@@ -20,6 +20,7 @@ import (
 	"strings"
 	"log"
 	"time"
+	"math/rand"
 	"path"
 	"os"
 	"encoding/json"
@@ -41,6 +42,7 @@ const (
 // load/save persistent state data.
 type Clyde struct {
 	Chain *markov.Chain
+	zsigChain *markov.Chain
 	homeDir string
 	session *zephyr.Session
 	ctx *krb5.Context
@@ -79,6 +81,13 @@ func LoadClyde(dir string) (*Clyde, error) {
 		return nil, err
 	}
 
+	// Create zsig markov chain, and try to load saved chain
+	c.zsigChain = markov.NewChain(zsigPrefixLen)
+	err = c.zsigChain.Load(c.Path(zsigChainFile))
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+
 	c.session.SendSubscribeNoDefaults(c.ctx, []zephyr.Subscription{{Class: homeClass, Instance: homeInstance, Recipient: ""}})
 	c.subs = make(map[string]ClassPolicy)
 	err = c.LoadSubs()
@@ -110,6 +119,7 @@ func (c *Clyde) Subscribe(class string, policy ClassPolicy) {
 // class and instance.
 func (c *Clyde) Send(class, instance, body string) {
 	uid := c.session.MakeUID(time.Now())
+	zsig := c.zsigChain.Generate("", 1, rand.Intn(6)+2)
 	msg := &zephyr.Message{
 		Header: zephyr.Header{
 			Kind:	zephyr.ACKED,
@@ -143,6 +153,11 @@ func (c *Clyde) Shutdown() error {
 		return err
 	}
 
+	err = c.zsigChain.Save(c.Path(zsigChainFile))
+	if err != nil {
+		return err
+	}
+
 	err = c.SaveSubs()
 	if err != nil {
 		return err
@@ -172,11 +187,12 @@ const homeClass = "ztoys-dev"
 const homeInstance = "clyde"
 
 const chainFile = "chain.json"
+const zsigChainFile = "zsigChain.json"
 const subsFile = "subs.json"
 
 const sender = "clyde"
-const zsig = "Clyde"
 const prefixLen = 2
+const zsigPrefixLen = 1 // Be more creative with less input data
 
 
 func (c *Clyde) handleMessage(r zephyr.MessageReaderResult) {
@@ -186,6 +202,7 @@ func (c *Clyde) handleMessage(r zephyr.MessageReaderResult) {
 	}
 
 	c.Chain.Build(strings.NewReader(r.Message.Body[1]))
+	c.zsigChain.Build(strings.NewReader(r.Message.Body[0]))
 
 	// Perform the first behavior that triggers, and exit
 	for _, b := range Behaviors {
