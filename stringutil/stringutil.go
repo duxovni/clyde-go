@@ -64,3 +64,24 @@ func Capitalize(w string) string {
 		return fmt.Sprint(strings.ToUpper(parts[0]), parts[1])
 	}
 }
+
+// Escape escapes a string to make it suitable for use in a
+// filename. Specifically, all non-printable byte sequences (as judged
+// by fmt's %q verb) and all '/' characters will be replaced with
+// escape sequences of the form \xnn.
+func Escape(s string) string {
+	var chars []string
+
+	for _, rune := range s {
+		var charString string
+		if rune == '/' {
+			charString = fmt.Sprintf("\\x%02x", rune)
+		} else {
+			quoted := fmt.Sprintf("%q", rune)
+			charString = quoted[1:len(quoted)-1]
+		}
+		chars = append(chars, charString)
+	}
+
+	return strings.Join(chars, "")
+}

@@ -19,6 +19,7 @@ import (
 	"math/rand"
 	"bufio"
 	"os"
+	"path"
 	"github.com/zephyr-im/zephyr-go"
 	"github.com/sdukhovni/clyde-go/stringutil"
 )
@@ -121,7 +122,7 @@ func allLines(c *Clyde, filename string) ([]string, error) {
 func randomLine(c *Clyde, filename string) (string, error) {
 	lines, err := allLines(c, filename)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 	return lines[rand.Intn(len(lines))], nil
 }
@@ -145,6 +146,8 @@ func addLine(c *Clyde, filename, line string) error {
 // Behaviors is a list of behaviors to be attempted in the order
 // given.
 var Behaviors = []Behavior{
+	addActLike,
+	actLike,
 	addSub,
 	checkSub,
 	learnJob,
@@ -152,6 +155,33 @@ var Behaviors = []Behavior{
 	fight,
 	chat,
 }
+
+var addActLike = StandardBehavior("clyde.? (?P<person>.+) says,? (\"(?P<phrase>[^\"]+)\".?|'(?P<phrase>[^']+)'.?|(?P<phrase>[^\"']+)|(?P<phrase>.+[\"'].+))$",
+	[]string{"person", "phrase"},
+	false,
+	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
+		alDir := c.Path("al")
+		os.MkdirAll(alDir, 0755)
+		filename := path.Join("al", stringutil.Escape(strings.ToLower(kvs["person"])))
+		addLine(c, filename, kvs["phrase"])
+		return "Ok!"
+	})
+
+var actLike = StandardBehavior("clyde.? ((please )?act like (?P<person>.*[^\\.\\?!])(?P<punc>.*?)$|what does (?P<person>.+) say)",
+	[]string{"person", "punc"},
+	false,
+	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
+		filename := path.Join("al", stringutil.Escape(strings.ToLower(kvs["person"])))
+		phrase, err := randomLine(c, filename)
+		if err != nil {
+			filename = path.Join("al", stringutil.Escape(strings.ToLower(fmt.Sprint(kvs["person"], kvs["punc"]))))
+			phrase, err = randomLine(c, filename)
+			if err != nil {
+				return fmt.Sprintf("I don't know how to act like %s.", kvs["person"])
+			}
+		}
+		return phrase
+	})
 
 var addSub = StandardBehavior("clyde.*sub(scribe)? to (me|my class|(-c )?(?P<class>[^ !\\?]+[^ !\\?\\.]))",
 	[]string{"class"},
