@@ -15,6 +15,7 @@ import (
 	"log"
 	"fmt"
 	"strings"
+	"strconv"
 	"regexp"
 	"math/rand"
 	"bufio"
@@ -153,6 +154,7 @@ var Behaviors = []Behavior{
 	learnJob,
 	story,
 	fight,
+	dice,
 	chat,
 }
 
@@ -252,6 +254,19 @@ var fight = StandardBehavior("if (?P<fight1>.+) and (?P<fight2>.+) (fought|duell
 			winner = "fight2"
 		}
 		return fmt.Sprintf("I think %s would win, because", kvs[winner])
+	})
+
+var dice = StandardBehavior("( |^)(?P<count>[0-9]*)d(?P<faces>[0-9]+)",
+	[]string{"count", "faces"},
+	false,
+	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
+		count, _ := strconv.Atoi(kvs["count"])
+		faces, _ := strconv.Atoi(kvs["faces"])
+		total := 0
+		for i := 0; i < count; i++ {
+			total += rand.Intn(faces) + 1
+		}
+		return strconv.Itoa(total)
 	})
 
 var chat = StandardBehavior("clyde, (?P<topic>[^ ]+)",
