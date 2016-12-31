@@ -154,6 +154,7 @@ var Behaviors = []Behavior{
 	learnJob,
 	story,
 	fight,
+	fortune,
 	dice,
 	chat,
 }
@@ -254,6 +255,37 @@ var fight = StandardBehavior("if (?P<fight1>.+) and (?P<fight2>.+) (fought|duell
 			winner = "fight2"
 		}
 		return fmt.Sprintf("I think %s would win, because", kvs[winner])
+	})
+
+var fortune = StandardBehavior("fortune", []string{}, false,
+	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
+		var intros []string
+		switch rand.Intn(3) {
+		case 0:
+			intros = []string{
+				fmt.Sprintf("%s, yesterday you were", shortSender(r)),
+				"Today you will",
+				"Tomorrow you should",
+			}
+		case 1:
+			planet, _ := randomLine(c, "planets")
+			intros = []string{
+				"The stars say",
+				fmt.Sprintf("%s is aligned, so expect", planet),
+				"Be careful of",
+			}
+		case 2:
+			intros = []string{
+				fmt.Sprintf("%s, in love, you will", shortSender(r)),
+				"In work, you will",
+				"For yourself, you should",
+			}
+		}
+		var response []string
+		for _, intro := range intros {
+			response = append(response, c.Chain.Generate(intro, 1, maxWords))
+		}
+		return strings.Join(response, " ")
 	})
 
 var dice = StandardBehavior("( |^)(?P<count>[0-9]*)d(?P<faces>[0-9]+)",
