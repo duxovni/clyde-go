@@ -156,6 +156,7 @@ var Behaviors = []Behavior{
 	fight,
 	fortune,
 	dice,
+	quip,
 	chat,
 }
 
@@ -300,6 +301,62 @@ var dice = StandardBehavior("( |^)(?P<count>[0-9]*)d(?P<faces>[0-9]+)",
 		}
 		return strconv.Itoa(total)
 	})
+
+var simpleQuips = map[string]string{
+	"wacky": "Aw, and me without my spork.",
+	"too many secrets": "Setec Astronomy",
+	"manna manna": "Do do dit do do.",
+	"growl for me": "Grrrrrr",
+	"(^| )(are|am) not[ ,\\.\\?!]": "Are too!",
+	"(^| )(are|am) too[ ,\\.\\?!]": "Am not!",
+	"i've been captured": "Yay!",
+	"no, that's a bad thing": "Yay!",
+	"morse": "dit, dit dah dah",
+	"(^| )sing": "la la la",
+	"what makes the grass grow": "Fertilizer, sir!",
+	"what is the meaning of life\\?": "42/3",
+	"what do you want\\?": "Never ask that question.",
+	"is there a god\\?": "There is now...",
+	"elvis|bermuda triangle": "Elvis needs boats!!",
+	"brains": "BRAAAAAAAAIIIIINNNNSSSSSS",
+	"bonfire": "Bonfire is not a hivemind.",
+	"(^| )los(e|t|ing) [^ ]+ way": "Don't lose your way!",
+}
+
+var fileQuips = map[string]string{
+	"(^| )ai[ ,\\.\\?]": "ai",
+	"[\\*:](tickles?|poke)[\\*:]": "tickle",
+	"what('| i)s wrong\\?": "wrong",
+	"thank(s| you)": "welcome",
+	"bye": "bye",
+	"(good ?|')night": "night",
+	"how do you like": "howlike",
+	"(^| )(hi|hello)[ ,\\.\\?!]": "hello",
+	"pull!": "pull",
+}
+
+func quip(c *Clyde, r zephyr.MessageReaderResult) bool {
+	for k,v := range simpleQuips {
+		if StandardBehavior(k, []string{}, false,
+			func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
+				return v
+			})(c, r) {
+				return true
+			}
+	}
+
+	for k,v := range fileQuips {
+		if StandardBehavior(k, []string{}, false,
+			func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
+				resp, _ := randomLine(c, v)
+				return resp
+			})(c, r) {
+				return true
+			}
+	}
+
+	return false
+}
 
 var chat = StandardBehavior("clyde, (?P<topic>[^ ]+)",
 	[]string{"topic"},
