@@ -37,8 +37,8 @@ func main() {
 	}
 	defer clyde.Shutdown()
 
-	// Start Clyde's listener goroutine
-	go clyde.Listen()
+	// Start Clyde's main goroutine
+	clyde.Run()
 
 	// Keep listening until a SIGINT or SIGTERM.
 	c := make(chan os.Signal, 1)

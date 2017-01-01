@@ -25,21 +25,21 @@ import (
 	"github.com/sdukhovni/clyde-go/stringutil"
 )
 
-// Behavior represents a zephyrbot behavior. A Behavior takes a Clyde
+// behavior represents a zephyrbot behavior. A behavior takes a Clyde
 // instance and an incoming zephyr, and either returns false to
 // indicate that the behavior was not triggered by the message, or
 // performs some action (possibly using or modifying the Clyde) and
 // returns true to indicate that the behavior was triggered.
-type Behavior func(*Clyde, zephyr.MessageReaderResult) bool
+type behavior func(*Clyde, zephyr.MessageReaderResult) bool
 
-// StandardBehavior generates a Behavior following a standard pattern
+// standardBehavior generates a behavior following a standard pattern
 // of triggering based on a case-insensitive regular expression in a
 // zephyr body, reading some named capturing groups from the regexp
 // match, possibly performing some action, and replying with a single
 // zephyr (possibly generated using the markov chainer) either on the
 // same class and instance as the incoming zephyr or on Clyde's home
 // class.
-func StandardBehavior(pattern string, keys []string, chain bool, resp func(*Clyde, zephyr.MessageReaderResult, map[string]string) string) Behavior {
+func standardBehavior(pattern string, keys []string, chain bool, resp func(*Clyde, zephyr.MessageReaderResult, map[string]string) string) behavior {
 	return func(c *Clyde, r zephyr.MessageReaderResult) bool {
 		body := strings.Join(strings.Fields(r.Message.Body[1]), " ") // normalize spacing for regexp matches
 		insPattern := fmt.Sprint("(?i)", pattern)
@@ -56,7 +56,7 @@ func StandardBehavior(pattern string, keys []string, chain bool, resp func(*Clyd
 
 		response := resp(c, r, keyvals)
 		if chain {
-			response = c.Chain.Generate(response, sentenceCounts[rand.Intn(len(sentenceCounts))], maxWords)
+			response = c.chain.Generate(response, sentenceCounts[rand.Intn(len(sentenceCounts))], maxWords)
 		}
 
 		class := r.Message.Header.Class
@@ -73,7 +73,7 @@ func StandardBehavior(pattern string, keys []string, chain bool, resp func(*Clyd
 			}
 		}
 
-		c.Send(class, instance, stringutil.BreakLines(response, stringutil.MaxLine))
+		c.send(class, instance, stringutil.BreakLines(response, stringutil.MaxLine))
 
 		return true
 	}
@@ -97,7 +97,7 @@ func shortSender(r zephyr.MessageReaderResult) string {
 // allLines returns a list of non-empty lines in a file in Clyde's
 // home directory.
 func allLines(c *Clyde, filename string) ([]string, error) {
-	filepath := c.Path(filename)
+	filepath := c.path(filename)
 
 	f, err := os.Open(filepath)
 	if err != nil {
@@ -130,7 +130,7 @@ func randomLine(c *Clyde, filename string) (string, error) {
 
 // addLine adds a line to a file in Clyde's home directory.
 func addLine(c *Clyde, filename, line string) error {
-	filepath := c.Path(filename)
+	filepath := c.path(filename)
 
 	f, err := os.OpenFile(filepath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
@@ -146,7 +146,7 @@ func addLine(c *Clyde, filename, line string) error {
 
 // Behaviors is a list of behaviors to be attempted in the order
 // given.
-var Behaviors = []Behavior{
+var behaviors = []behavior{
 	addActLike,
 	actLike,
 	addSub,
@@ -160,18 +160,18 @@ var Behaviors = []Behavior{
 	chat,
 }
 
-var addActLike = StandardBehavior("clyde.? (?P<person>.+) says,? (\"(?P<phrase>[^\"]+)\".?|'(?P<phrase>[^']+)'.?|(?P<phrase>[^\"']+)|(?P<phrase>.+[\"'].+))$",
+var addActLike = standardBehavior("clyde.? (?P<person>.+) says,? (\"(?P<phrase>[^\"]+)\".?|'(?P<phrase>[^']+)'.?|(?P<phrase>[^\"']+)|(?P<phrase>.+[\"'].+))$",
 	[]string{"person", "phrase"},
 	false,
 	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
-		alDir := c.Path("al")
+		alDir := c.path("al")
 		os.MkdirAll(alDir, 0755)
 		filename := path.Join("al", stringutil.Escape(strings.ToLower(kvs["person"])))
 		addLine(c, filename, kvs["phrase"])
 		return "Ok!"
 	})
 
-var actLike = StandardBehavior("clyde.? ((please )?act like (?P<person>.*[^\\.\\?!])(?P<punc>.*?)$|what does (?P<person>.+) say)",
+var actLike = standardBehavior("clyde.? ((please )?act like (?P<person>.*[^\\.\\?!])(?P<punc>.*?)$|what does (?P<person>.+) say)",
 	[]string{"person", "punc"},
 	false,
 	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
@@ -187,7 +187,7 @@ var actLike = StandardBehavior("clyde.? ((please )?act like (?P<person>.*[^\\.\\
 		return phrase
 	})
 
-var addSub = StandardBehavior("clyde.*sub(scribe)? to (me|my class|(-c )?(?P<class>[^ !\\?]+[^ !\\?\\.]))",
+var addSub = standardBehavior("clyde.*sub(scribe)? to (me|my class|(-c )?(?P<class>[^ !\\?]+[^ !\\?\\.]))",
 	[]string{"class"},
 	false,
 	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
@@ -208,11 +208,11 @@ var addSub = StandardBehavior("clyde.*sub(scribe)? to (me|my class|(-c )?(?P<cla
 			return "You look sketchy, I don't trust you..."
 		}
 
-		c.Subscribe(class, REPLYHOME)
+		c.subscribe(class, REPLYHOME)
 		return fmt.Sprintf("-c %s sounds awesome! Thanks for the invitation :)", class)
 	})
 
-var checkSub = StandardBehavior("are you (on|sub(scri)?bed to) (me|my class|(-c )?(?P<class>[^ !\\?]+[^ !\\?\\.]))",
+var checkSub = standardBehavior("are you (on|sub(scri)?bed to) (me|my class|(-c )?(?P<class>[^ !\\?]+[^ !\\?\\.]))",
 	[]string{"class"},
 	false,
 	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
@@ -228,7 +228,7 @@ var checkSub = StandardBehavior("are you (on|sub(scri)?bed to) (me|my class|(-c 
 		}
 	})
 
-var learnJob = StandardBehavior("clyde.? (?P<job>.+) is an? (job|profession|occupation)",
+var learnJob = standardBehavior("clyde.? (?P<job>.+) is an? (job|profession|occupation)",
 	[]string{"job"},
 	false,
 	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
@@ -236,7 +236,7 @@ var learnJob = StandardBehavior("clyde.? (?P<job>.+) is an? (job|profession|occu
 		return "That's what I wanna be when I grow up!"
 	})
 
-var story = StandardBehavior("tell me a story",
+var story = standardBehavior("tell me a story",
 	nil,
 	true,
 	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
@@ -244,7 +244,7 @@ var story = StandardBehavior("tell me a story",
 		return fmt.Sprintf("Once upon a time, there was %s %s named %s who", stringutil.Article(job), job, shortSender(r))
 	})
 
-var fight = StandardBehavior("if (?P<fight1>.+) and (?P<fight2>.+) (fought|duell?ed|got in|were in|had)|(who|which|what) .* between (?P<fight1>.+) and (?P<fight2>.+[^,\\?])(\\?|$)|between (?P<fight1>.+) and (?P<fight2>.+[^,\\?]),? (who|which|what)",
+var fight = standardBehavior("if (?P<fight1>.+) and (?P<fight2>.+) (fought|duell?ed|got in|were in|had)|(who|which|what) .* between (?P<fight1>.+) and (?P<fight2>.+[^,\\?])(\\?|$)|between (?P<fight1>.+) and (?P<fight2>.+[^,\\?]),? (who|which|what)",
 	[]string{"fight1", "fight2"},
 	true,
 	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
@@ -258,7 +258,7 @@ var fight = StandardBehavior("if (?P<fight1>.+) and (?P<fight2>.+) (fought|duell
 		return fmt.Sprintf("I think %s would win, because", kvs[winner])
 	})
 
-var fortune = StandardBehavior("fortune", []string{}, false,
+var fortune = standardBehavior("fortune", []string{}, false,
 	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
 		var intros []string
 		switch rand.Intn(3) {
@@ -284,12 +284,12 @@ var fortune = StandardBehavior("fortune", []string{}, false,
 		}
 		var response []string
 		for _, intro := range intros {
-			response = append(response, c.Chain.Generate(intro, 1, maxWords))
+			response = append(response, c.chain.Generate(intro, 1, maxWords))
 		}
 		return strings.Join(response, " ")
 	})
 
-var dice = StandardBehavior("( |^)(?P<count>[0-9]*)d(?P<faces>[0-9]+)",
+var dice = standardBehavior("( |^)(?P<count>[0-9]*)d(?P<faces>[0-9]+)",
 	[]string{"count", "faces"},
 	false,
 	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
@@ -337,7 +337,7 @@ var fileQuips = map[string]string{
 
 func quip(c *Clyde, r zephyr.MessageReaderResult) bool {
 	for k,v := range simpleQuips {
-		if StandardBehavior(k, []string{}, false,
+		if standardBehavior(k, []string{}, false,
 			func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
 				return v
 			})(c, r) {
@@ -346,7 +346,7 @@ func quip(c *Clyde, r zephyr.MessageReaderResult) bool {
 	}
 
 	for k,v := range fileQuips {
-		if StandardBehavior(k, []string{}, false,
+		if standardBehavior(k, []string{}, false,
 			func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
 				resp, _ := randomLine(c, v)
 				return resp
@@ -358,7 +358,7 @@ func quip(c *Clyde, r zephyr.MessageReaderResult) bool {
 	return false
 }
 
-var chat = StandardBehavior("clyde, (?P<topic>[^ ]+)",
+var chat = standardBehavior("clyde, (?P<topic>[^ ]+)",
 	[]string{"topic"},
 	true,
 	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {

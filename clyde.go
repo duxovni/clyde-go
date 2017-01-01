@@ -24,29 +24,25 @@ import (
 	"path"
 	"os"
 	"encoding/json"
+	"sync"
 	"github.com/zephyr-im/krb5-go"
 	"github.com/zephyr-im/zephyr-go"
 	"github.com/sdukhovni/clyde-go/markov"
-)
-
-type ClassPolicy uint8
-
-const (
-	LISTEN ClassPolicy = 1
-	REPLYHOME ClassPolicy = 2
-	FULL ClassPolicy = 3
 )
 
 // Clyde (the struct) holds all of the internal state needed for Clyde
 // (the zephyrbot) to send and receive zephyrs, generate text, and
 // load/save persistent state data.
 type Clyde struct {
-	Chain *markov.Chain
+	chain *markov.Chain
 	zsigChain *markov.Chain
 	homeDir string
 	session *zephyr.Session
 	ctx *krb5.Context
-	subs map[string]ClassPolicy
+	subs map[string]classPolicy
+	ticker *time.Ticker
+	shutdown chan struct{}
+	wg sync.WaitGroup
 }
 
 // LoadClyde initializes a Clyde by loading data files found in the
@@ -75,39 +71,83 @@ func LoadClyde(dir string) (*Clyde, error) {
 	}
 
 	// Create markov chain, and try to load saved chain
-	c.Chain = markov.NewChain(prefixLen)
-	err = c.Chain.Load(c.Path(chainFile))
+	c.chain = markov.NewChain(prefixLen)
+	err = c.chain.Load(c.path(chainFile))
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
 
 	// Create zsig markov chain, and try to load saved chain
 	c.zsigChain = markov.NewChain(zsigPrefixLen)
-	err = c.zsigChain.Load(c.Path(zsigChainFile))
+	err = c.zsigChain.Load(c.path(zsigChainFile))
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
 
 	c.session.SendSubscribeNoDefaults(c.ctx, []zephyr.Subscription{{Class: homeClass, Instance: homeInstance, Recipient: ""}})
-	c.subs = make(map[string]ClassPolicy)
-	err = c.LoadSubs()
+	c.subs = make(map[string]classPolicy)
+	err = c.loadSubs()
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
 
+	c.ticker = time.NewTicker(time.Minute)
+
+	c.shutdown = make(chan struct{})
+
 	return c, nil
 }
 
-// Listen receives and handles zephyrs on classes Clyde is subscribed
-// to, and never returns until Clyde is shut down.
-func (c *Clyde) Listen() {
-	for r := range c.session.Messages() {
-		c.handleMessage(r)
-	}
+// Run starts Clyde running; Clyde will begin receiving and responding
+// to zephyrs on classes Clyde is subscribed to, as well as responding
+// to clock ticks. After Clyde.Run() is called, Clyde.Shutdown() must
+// be called before exiting.
+func (c *Clyde) Run() {
+	c.wg.Add(1)
+	go func() {
+		defer c.handleShutdown()
+		for {
+			// A shutdown should take priority over
+			// pending messages/ticks
+			select {
+			case <-c.shutdown:
+				return
+			default:
+			}
+			select {
+			case t := <-c.ticker.C:
+				c.handleTick(t)
+			case r := <-c.session.Messages():
+				c.handleMessage(r)
+			case <-c.shutdown:
+				return
+			}
+		}
+	}()
 }
 
-// Subscribe subscribes Clyde to a new zephyr class.
-func (c *Clyde) Subscribe(class string, policy ClassPolicy) {
+// Shutdown tells Clyde to save his persistent state to his home
+// directory, close his zephyr session, and perform any other
+// necessary cleanup for Clyde to shut down. Any program that uses a
+// Clyde must call this method to cleanly shutdown Clyde before
+// exiting.
+func (c *Clyde) Shutdown() {
+	close(c.shutdown)
+	c.wg.Wait()
+	c.session.Close() // Moved here to avoid lingering internal event loop issue
+}
+
+
+type classPolicy uint8
+
+const (
+	LISTEN classPolicy = 1
+	REPLYHOME classPolicy = 2
+	FULL classPolicy = 3
+)
+
+// subscribe subscribes Clyde to a new zephyr class.
+func (c *Clyde) subscribe(class string, policy classPolicy) {
 	if c.subs[class] != 0 {
 		return
 	}
@@ -115,9 +155,9 @@ func (c *Clyde) Subscribe(class string, policy ClassPolicy) {
 	c.subs[class] = policy
 }
 
-// Send sends a zephyr from Clyde with the given body to the given
+// send sends a zephyr from Clyde with the given body to the given
 // class and instance.
-func (c *Clyde) Send(class, instance, body string) {
+func (c *Clyde) send(class, instance, body string) {
 	uid := c.session.MakeUID(time.Now())
 	zsig := c.zsigChain.Generate("", 1, rand.Intn(6)+2)
 	msg := &zephyr.Message{
@@ -141,44 +181,7 @@ func (c *Clyde) Send(class, instance, body string) {
 	}
 }
 
-// Shutdown saves Clyde's persistent state to Clyde's home directory,
-// closes Clyde's zephyr session, and performs any necessary cleanup
-// for Clyde to shut down. Any program that uses a Clyde must call
-// this method to cleanly shutdown Clyde before exiting.
-func (c *Clyde) Shutdown() error {
-	var err error
-
-	err = c.Chain.Save(c.Path(chainFile))
-	if err != nil {
-		return err
-	}
-
-	err = c.zsigChain.Save(c.Path(zsigChainFile))
-	if err != nil {
-		return err
-	}
-
-	err = c.SaveSubs()
-	if err != nil {
-		return err
-	}
-
-	_, err = c.session.SendCancelSubscriptions(c.ctx)
-	if err != nil {
-		return err
-	}
-
-	c.ctx.Free()
-
-	err = c.session.Close()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (c *Clyde) Path(filename string) string {
+func (c *Clyde) path(filename string) string {
 	return path.Join(c.homeDir, filename)
 }
 
@@ -201,22 +204,36 @@ func (c *Clyde) handleMessage(r zephyr.MessageReaderResult) {
 		return
 	}
 
-	c.Chain.Build(strings.NewReader(r.Message.Body[1]))
+	c.chain.Build(strings.NewReader(r.Message.Body[1]))
 	c.zsigChain.Build(strings.NewReader(r.Message.Body[0]))
 
 	// Perform the first behavior that triggers, and exit
-	for _, b := range Behaviors {
+	for _, b := range behaviors {
 		if b(c, r) {
 			return
 		}
 	}
 }
 
+func (c *Clyde) handleTick(t time.Time) {
+	log.Println("tick")
+}
 
-// LoadSubs attempts to load and subscribe to a list of subscriptions
+func (c *Clyde) handleShutdown() {
+	c.ticker.Stop()
+	c.chain.Save(c.path(chainFile))
+	c.zsigChain.Save(c.path(zsigChainFile))
+	c.saveSubs()
+	c.session.SendCancelSubscriptions(c.ctx)
+	c.ctx.Free()
+	// c.session.Close()
+	c.wg.Done()
+}
+
+// loadSubs attempts to load and subscribe to a list of subscriptions
 // in JSON format from a file in Clyde's home directory.
-func (c *Clyde) LoadSubs() error {
-	f, err := os.Open(c.Path(subsFile))
+func (c *Clyde) loadSubs() error {
+	f, err := os.Open(c.path(subsFile))
 	if err != nil {
 		return err
 	}
@@ -240,10 +257,10 @@ func (c *Clyde) LoadSubs() error {
 	return nil
 }
 
-// SaveSubs saves Clyde's subscriptions to a file in JSON format in
+// saveSubs saves Clyde's subscriptions to a file in JSON format in
 // Clyde's home directory.
-func (c *Clyde) SaveSubs() error {
-	f, err := os.Create(c.Path(subsFile))
+func (c *Clyde) saveSubs() error {
+	f, err := os.Create(c.path(subsFile))
 	if err != nil {
 		return err
 	}
