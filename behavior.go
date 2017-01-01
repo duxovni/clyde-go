@@ -153,6 +153,7 @@ var behaviors = []behavior{
 	addSub,
 	checkSub,
 	getMood,
+	cheerup,
 	learnJob,
 	story,
 	fight,
@@ -175,22 +176,20 @@ func empathy(c *Clyde, r zephyr.MessageReaderResult) bool {
 
 	switch emote {
 	case ":D", ":3", "laugh":
-		c.mood += rand.Intn(2)
+		if rand.Intn(2) == 0 {
+			c.mood = c.mood.Better()
+		}
 		fallthrough
 	case ":)", "happy", "smile":
-		c.mood++
+		c.mood = c.mood.Better()
 
 	case ";(", ":,(", "cry":
-		c.mood -= rand.Intn(2)
+		if rand.Intn(2) == 0 {
+			c.mood = c.mood.Worse()
+		}
 		fallthrough
 	case ":(", "sad", "frown":
-		c.mood--
-	}
-	if c.mood > maxMood {
-		c.mood = maxMood
-	}
-	if c.mood < 0 {
-		c.mood = 0
+		c.mood = c.mood.Worse()
 	}
 
 	return false
@@ -266,7 +265,13 @@ var checkSub = standardBehavior("are you (on|sub(scri)?bed to) (me|my class|(-c 
 
 var getMood = standardBehavior("clyde.* how are you", []string{}, false,
 	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
-		return fmt.Sprintf("I'm %s%s", MoodString(c.mood), MoodPunc(c.mood))
+		return fmt.Sprintf("I'm %s%s", c.mood.String(), c.mood.Punc())
+	})
+
+var cheerup = standardBehavior("clyde.*[^a-z](hug|cuddle|s[ck]rit?ch)", []string{}, false,
+	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
+		c.mood = c.mood.Better()
+		return "Thanks :)"
 	})
 
 var learnJob = standardBehavior("clyde.? (?P<job>.+) is an? (job|profession|occupation)",
