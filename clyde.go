@@ -40,9 +40,69 @@ type Clyde struct {
 	session *zephyr.Session
 	ctx *krb5.Context
 	subs map[string]classPolicy
+	mood int
+	lastInteraction time.Time
 	ticker *time.Ticker
 	shutdown chan struct{}
 	wg sync.WaitGroup
+}
+
+const (
+	yuckyMood	int = 0
+	angryMood	int = 1
+	unhappyMood	int = 2
+	lonelyMood	int = 3
+	turnipMood	int = 4
+	okMood		int = 5
+	goodMood	int = 6
+	greatMood	int = 7
+	maxMood		int = 7
+)
+
+func MoodString(m int) string {
+	switch m {
+	case yuckyMood:
+		return "yucky"
+	case angryMood:
+		return "angry"
+	case unhappyMood:
+		return "unhappy"
+	case lonelyMood:
+		return "lonely"
+	case turnipMood:
+		return "a turnip"
+	case okMood:
+		return "ok"
+	case goodMood:
+		return "good"
+	case greatMood:
+		return "great"
+	default:
+		return "ok"
+	}
+}
+
+func MoodPunc(m int) string {
+	switch m {
+	case yuckyMood:
+		return "."
+	case angryMood:
+		return "!"
+	case unhappyMood:
+		return "."
+	case lonelyMood:
+		return " :("
+	case turnipMood:
+		return "."
+	case okMood:
+		return "."
+	case goodMood:
+		return " :)"
+	case greatMood:
+		return "!"
+	default:
+		return "."
+	}
 }
 
 // LoadClyde initializes a Clyde by loading data files found in the
@@ -90,6 +150,10 @@ func LoadClyde(dir string) (*Clyde, error) {
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
+
+	c.mood = okMood
+
+	c.lastInteraction = time.Now()
 
 	c.ticker = time.NewTicker(time.Minute)
 
@@ -210,13 +274,32 @@ func (c *Clyde) handleMessage(r zephyr.MessageReaderResult) {
 	// Perform the first behavior that triggers, and exit
 	for _, b := range behaviors {
 		if b(c, r) {
+			c.lastInteraction = time.Now()
 			return
 		}
 	}
 }
 
 func (c *Clyde) handleTick(t time.Time) {
-	log.Println("tick")
+	aloneDuration := time.Since(c.lastInteraction)
+
+	if aloneDuration >= time.Hour && rand.Intn(90) == 0 {
+		var phrase string
+		switch c.mood {
+		case lonelyMood:
+			phrase,_ = randomLine(c, "bored")
+		case goodMood:
+			phrase = "Hi, all."
+		case greatMood:
+			phrase = "*bounce*"
+		}
+		if phrase != "" {
+			c.send(homeClass, homeInstance, phrase)
+		}
+	}
+	if aloneDuration >= 2*time.Hour && rand.Intn(30) == 0 {
+		c.mood = lonelyMood
+	}
 }
 
 func (c *Clyde) handleShutdown() {

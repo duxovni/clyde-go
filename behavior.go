@@ -147,10 +147,12 @@ func addLine(c *Clyde, filename, line string) error {
 // Behaviors is a list of behaviors to be attempted in the order
 // given.
 var behaviors = []behavior{
+	empathy,
 	addActLike,
 	actLike,
 	addSub,
 	checkSub,
+	getMood,
 	learnJob,
 	story,
 	fight,
@@ -158,6 +160,40 @@ var behaviors = []behavior{
 	dice,
 	quip,
 	chat,
+}
+
+// Special behavior to update Clyde's mood based on incoming messages;
+// always returns false.
+func empathy(c *Clyde, r zephyr.MessageReaderResult) bool {
+	rex := regexp.MustCompile("(?i)(?P<emote>:[\\(\\)D3]|;\\(|:,\\(|happy|smile|laugh|sad|frown|cry)")
+	match := rex.FindStringSubmatchIndex(r.Message.Body[1])
+	if match == nil {
+		return false
+	}
+
+	emote := string(rex.ExpandString([]byte(""), "$emote", r.Message.Body[1], match))
+
+	switch emote {
+	case ":D", ":3", "laugh":
+		c.mood += rand.Intn(2)
+		fallthrough
+	case ":)", "happy", "smile":
+		c.mood++
+
+	case ";(", ":,(", "cry":
+		c.mood -= rand.Intn(2)
+		fallthrough
+	case ":(", "sad", "frown":
+		c.mood--
+	}
+	if c.mood > maxMood {
+		c.mood = maxMood
+	}
+	if c.mood < 0 {
+		c.mood = 0
+	}
+
+	return false
 }
 
 var addActLike = standardBehavior("clyde.? (?P<person>.+) says,? (\"(?P<phrase>[^\"]+)\".?|'(?P<phrase>[^']+)'.?|(?P<phrase>[^\"']+)|(?P<phrase>.+[\"'].+))$",
@@ -226,6 +262,11 @@ var checkSub = standardBehavior("are you (on|sub(scri)?bed to) (me|my class|(-c 
 		} else {
 			return fmt.Sprintf("Yup, I'm subbed to -c %s! It's my favorite class :)", class)
 		}
+	})
+
+var getMood = standardBehavior("clyde.* how are you", []string{}, false,
+	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
+		return fmt.Sprintf("I'm %s%s", MoodString(c.mood), MoodPunc(c.mood))
 	})
 
 var learnJob = standardBehavior("clyde.? (?P<job>.+) is an? (job|profession|occupation)",
