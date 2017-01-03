@@ -25,10 +25,12 @@ import (
 	"os"
 	"encoding/json"
 	"sync"
+	"fmt"
 	"github.com/zephyr-im/krb5-go"
 	"github.com/zephyr-im/zephyr-go"
 	"github.com/sdukhovni/clyde-go/markov"
 	"github.com/sdukhovni/clyde-go/mood"
+	"github.com/sdukhovni/clyde-go/cat"
 )
 
 // Clyde (the struct) holds all of the internal state needed for Clyde
@@ -44,6 +46,7 @@ type Clyde struct {
 	mood mood.Mood
 	lastInteraction time.Time
 	ticker *time.Ticker
+	cat cat.Cat
 	shutdown chan struct{}
 	wg sync.WaitGroup
 }
@@ -99,6 +102,8 @@ func LoadClyde(dir string) (*Clyde, error) {
 	c.lastInteraction = time.Now()
 
 	c.ticker = time.NewTicker(time.Minute)
+
+	c.cat = cat.Cat{"", "", cat.Traveling}
 
 	c.shutdown = make(chan struct{})
 
@@ -193,7 +198,7 @@ func (c *Clyde) path(filename string) string {
 }
 
 
-const homeClass = "ztoys-dev"
+const homeClass = "ztoys"
 const homeInstance = "clyde"
 
 const chainFile = "chain.json"
@@ -230,7 +235,18 @@ func (c *Clyde) handleTick(t time.Time) {
 		var phrase string
 		switch c.mood {
 		case mood.Lonely:
-			phrase,_ = randomLine(c, "bored")
+			if rand.Intn(3) == 0 {
+				switch c.cat.State {
+				case cat.Traveling:
+					c.send(homeClass, homeInstance, fmt.Sprintf("I can't find %s! :(", cat.CatName))
+					c.mood = c.mood.Worse()
+				case cat.Normal:
+					tryScoopCat(c)
+				}
+				return
+			} else {
+				phrase,_ = randomLine(c, "bored")
+			}
 		case mood.Good:
 			phrase = "Hi, all."
 		case mood.Great:

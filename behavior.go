@@ -21,8 +21,11 @@ import (
 	"bufio"
 	"os"
 	"path"
+	"time"
 	"github.com/zephyr-im/zephyr-go"
 	"github.com/sdukhovni/clyde-go/stringutil"
+	"github.com/sdukhovni/clyde-go/mood"
+	"github.com/sdukhovni/clyde-go/cat"
 )
 
 // behavior represents a zephyrbot behavior. A behavior takes a Clyde
@@ -147,6 +150,7 @@ func addLine(c *Clyde, filename, line string) error {
 // Behaviors is a list of behaviors to be attempted in the order
 // given.
 var behaviors = []behavior{
+	watchCat,
 	empathy,
 	addActLike,
 	actLike,
@@ -161,6 +165,99 @@ var behaviors = []behavior{
 	dice,
 	quip,
 	chat,
+}
+
+
+func tryPlayCat(c *Clyde) {
+	c.cat.State = cat.TryPlay
+	c.send(c.cat.Class, c.cat.Instance, cat.CatCmd(cat.PlayCmds[rand.Intn(len(cat.PlayCmds))]))
+}
+
+func tryScoopCat(c *Clyde) {
+	if c.cat.Class != homeClass || c.cat.Instance != homeInstance {
+		c.cat.State = cat.TryScoop
+		c.send(c.cat.Class, c.cat.Instance, cat.CatCmd("scoop"))
+	} else {
+		tryPlayCat(c)
+	}
+}
+
+// watchCat is a special behavior for interacting with the cat and
+// keeping track of her whereabouts.
+func watchCat(c *Clyde, r zephyr.MessageReaderResult) bool {
+	if shortSender(r) != cat.CatName {
+		return false
+	}
+
+	body := r.Message.Body[1]
+
+	c.cat.Class = r.Message.Header.Class
+	c.cat.Instance = r.Message.Header.Instance
+
+	action, user := cat.ParseAction(body)
+
+	// Is the cat interacting with us?
+	withUs := user == "clyde"
+
+	switch action {
+	case cat.React:
+		if c.cat.State == cat.TryPlay && (withUs || user == "") {
+			c.mood = c.mood.Better().Better().AtLeastOk()
+			c.send(c.cat.Class, c.cat.Instance, ":)")
+			c.cat.State = cat.Normal
+			return true
+		}
+		c.cat.State = cat.Normal
+	case cat.Scooped:
+		if withUs {
+			c.cat.State = cat.WeScooped
+			c.send(homeClass, homeInstance, fmt.Sprintf("Let's go over here, %s", cat.CatName))
+		} else {
+			c.cat.State = cat.Normal
+		}
+	case cat.ScoopFailed:
+		if withUs {
+			c.send(c.cat.Class, c.cat.Instance, ":(")
+		}
+		c.cat.State = cat.Normal
+	case cat.Leave:
+		if withUs {
+			c.cat.State = cat.WeCarrying
+		} else {
+			c.cat.State = cat.Traveling
+		}
+	case cat.Enter:
+		if withUs {
+			c.cat.State = cat.TryDeposit
+			c.send(c.cat.Class, c.cat.Instance, cat.CatCmd("deposit"))
+		} else {
+			c.cat.State = cat.Normal
+		}
+	case cat.Deposited:
+		if withUs {
+			tryPlayCat(c)
+		} else {
+			c.cat.State = cat.Normal
+		}
+	case cat.Bored:
+		c.cat.State = cat.Normal
+		if time.Since(c.lastInteraction) > time.Hour {
+			switch rand.Intn(8) {
+			case 0:
+				tryScoopCat(c)
+			case 1:
+				tryPlayCat(c)
+			}
+		}
+	default:
+		c.cat.State = cat.Normal
+	}
+
+	if c.mood == mood.Lonely && c.cat.State == cat.Normal {
+		tryPlayCat(c)
+	}
+
+	return withUs
 }
 
 // Special behavior to update Clyde's mood based on incoming messages;
@@ -367,6 +464,7 @@ var simpleQuips = map[string]string{
 	"brains": "BRAAAAAAAAIIIIINNNNSSSSSS",
 	"bonfire": "Bonfire is not a hivemind.",
 	"(^| )los(e|t|ing) [^ ]+ way": "Don't lose your way!",
+	"clyde(::|\\.)(pet|play|cuddle|s[ck]rit?ch|treat|scoop|deposit)": "clyde climbs on top of the bookshelf and hisses",
 }
 
 var fileQuips = map[string]string{
