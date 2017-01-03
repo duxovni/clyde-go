@@ -69,7 +69,7 @@ func standardBehavior(pattern string, keys []string, chain bool, resp func(*Clyd
 			case 0, LISTEN:
 				return true
 			case REPLYHOME:
-				if !strings.Contains(strings.ToLower(r.Message.Body[1]), "clyde") {
+				if !strings.HasPrefix(strings.ToLower(r.Message.Body[1]), "clyde") {
 					class = homeClass
 					instance = homeInstance
 				}
@@ -164,6 +164,7 @@ var behaviors = []behavior{
 	fortune,
 	dice,
 	quip,
+	ping,
 	chat,
 }
 
@@ -502,7 +503,12 @@ func quip(c *Clyde, r zephyr.MessageReaderResult) bool {
 	return false
 }
 
-var chat = standardBehavior("clyde,? (?P<topic>[^ ]+)",
+var ping = standardBehavior("^clyde\\?$", []string{}, false,
+	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
+		return "Yes?"
+	})
+
+var chat = standardBehavior("^clyde,? (?P<topic>[^ ]+)",
 	[]string{"topic"},
 	true,
 	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
