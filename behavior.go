@@ -502,7 +502,7 @@ func quip(c *Clyde, r zephyr.MessageReaderResult) bool {
 	return false
 }
 
-var chat = standardBehavior("clyde, (?P<topic>[^ ]+)",
+var chat = standardBehavior("clyde,? (?P<topic>[^ ]+)",
 	[]string{"topic"},
 	true,
 	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
