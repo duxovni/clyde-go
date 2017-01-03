@@ -464,6 +464,7 @@ var simpleQuips = map[string]string{
 	"brains": "BRAAAAAAAAIIIIINNNNSSSSSS",
 	"bonfire": "Bonfire is not a hivemind.",
 	"(^| )los(e|t|ing) [^ ]+ way": "Don't lose your way!",
+	"contract": "／人◕ ‿‿ ◕人＼",
 	"clyde(::|\\.)(pet|play|cuddle|s[ck]rit?ch|treat|scoop|deposit)": "clyde climbs on top of the bookshelf and hisses",
 }
 
