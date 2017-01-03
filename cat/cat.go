@@ -50,7 +50,7 @@ const (
 )
 
 var ActionPatterns = map[CatAction]string {
-	React: "((bats|scratches) at|rubs up against|snuggles up to|looks at) (?P<user>\\w*)|slips out of (?P<user>\\w*)'s arms|purrs|meows|is confused",
+	React: "((bats|scratches) at|rubs up against|snuggles up to|looks at) (?P<user>\\w*)|slips out of (?P<user>\\w*)'s arms|(?P<user>) squeezes|purrs|meows|is confused",
 	Scooped: "(?P<user>\\w*) scoops",
 	ScoopFailed: "slips out of (?P<user>\\w*)'s grip",
 	Leave: "carried away by (?P<user>\\w*)",
@@ -89,4 +89,5 @@ var PlayCmds = []string {
 	"cuddle",
 	"treat",
 	"play",
+	"hug",
 }

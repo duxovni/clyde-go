@@ -203,7 +203,6 @@ func watchCat(c *Clyde, r zephyr.MessageReaderResult) bool {
 	case cat.React:
 		if c.cat.State == cat.TryPlay && (withUs || user == "") {
 			c.mood = c.mood.Better().Better().AtLeastOk()
-			c.send(c.cat.Class, c.cat.Instance, ":)")
 			c.cat.State = cat.Normal
 			return true
 		}
