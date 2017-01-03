@@ -76,7 +76,7 @@ func standardBehavior(pattern string, keys []string, chain bool, resp func(*Clyd
 			}
 		}
 
-		c.send(class, instance, stringutil.BreakLines(response, stringutil.MaxLine))
+		c.send(class, instance, response)
 
 		return true
 	}

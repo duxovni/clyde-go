@@ -31,6 +31,7 @@ import (
 	"github.com/sdukhovni/clyde-go/markov"
 	"github.com/sdukhovni/clyde-go/mood"
 	"github.com/sdukhovni/clyde-go/cat"
+	"github.com/sdukhovni/clyde-go/stringutil"
 )
 
 // Clyde (the struct) holds all of the internal state needed for Clyde
@@ -168,8 +169,35 @@ func (c *Clyde) subscribe(class string, policy classPolicy) {
 }
 
 // send sends a zephyr from Clyde with the given body to the given
-// class and instance.
+// class and instance. It delays based on the length of the message,
+// and alters the message based on Clyde's mood.
 func (c *Clyde) send(class, instance, body string) {
+	time.Sleep(time.Duration(len(body))*sendDelayFactor*time.Millisecond)
+
+	body = stringutil.BreakLines(body, stringutil.MaxLine)
+
+	if rand.Intn(10) == 0 {
+		format := "%s"
+		breaklines := true
+		switch c.mood {
+		case mood.Lonely:
+			format = "%s *sigh*"
+		case mood.Good:
+			format = "%s :)"
+		case mood.Angry:
+			format = "%s\n(╯°□°)╯︵ ┻━┻"
+			breaklines = false
+		case mood.Turnip:
+			format = "blub blub"
+		case mood.Great:
+			format = "*bounce* %s"
+		}
+		body = fmt.Sprintf(format, body)
+		if breaklines {
+			body = stringutil.BreakLines(body, stringutil.MaxLine)
+		}
+	}
+
 	uid := c.session.MakeUID(time.Now())
 	zsig := c.zsigChain.Generate("", 1, rand.Intn(6)+2)
 	msg := &zephyr.Message{
@@ -209,6 +237,7 @@ const sender = "clyde"
 const prefixLen = 2
 const zsigPrefixLen = 1 // Be more creative with less input data
 
+const sendDelayFactor = 20 // milliseconds to wait per character in a message before sending
 
 func (c *Clyde) handleMessage(r zephyr.MessageReaderResult) {
 	// Ignore our own messages
