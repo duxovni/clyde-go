@@ -188,7 +188,7 @@ func (c *Clyde) send(class, instance, body string) {
 			format = "%s\n(╯°□°)╯︵ ┻━┻"
 			breaklines = false
 		case mood.Turnip:
-			format = "blub blub"
+			body = "blub blub"
 		case mood.Great:
 			format = "*bounce* %s"
 		}
