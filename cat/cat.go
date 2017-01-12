@@ -13,6 +13,7 @@ package cat
 import (
 	"fmt"
 	"regexp"
+	"time"
 )
 
 // Cat is a structure for keeping track of the cat.
@@ -20,6 +21,10 @@ type Cat struct {
 	Class string
 	Instance string
 	State CatState
+	Stolen bool
+	StolenTime time.Time
+	StolenClass string
+	StolenInstance string
 }
 
 // CatState represents different states the cat can be in, with
@@ -49,6 +54,10 @@ const (
 	Bored		CatAction = 6
 )
 
+
+const CatName = "zeroday"
+const StealDuration = 30*time.Minute
+
 var ActionPatterns = map[CatAction]string {
 	React: "((bats|scratches) at|rubs up against|snuggles up to|looks at) (?P<user>\\w*)|slips out of (?P<user>\\w*)'s arms|(?P<user>) (squeezes|boops)|purrs|meows|is confused",
 	Scooped: "(?P<user>\\w*) scoops",
@@ -76,8 +85,6 @@ func ParseAction(msg string) (CatAction, string) {
 
 	return Bored, ""
 }
-
-const CatName = "zeroday"
 
 func CatCmd(cmd string) string {
 	return fmt.Sprintf("%s::%s", CatName, cmd)

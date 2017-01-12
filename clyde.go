@@ -104,7 +104,8 @@ func LoadClyde(dir string) (*Clyde, error) {
 
 	c.ticker = time.NewTicker(time.Minute)
 
-	c.cat = cat.Cat{"", "", cat.Traveling}
+	c.cat = cat.Cat{}
+	c.cat.State = cat.Traveling
 
 	c.shutdown = make(chan struct{})
 
@@ -287,6 +288,10 @@ func (c *Clyde) handleTick(t time.Time) {
 	}
 	if aloneDuration >= 2*time.Hour && rand.Intn(30) == 0 {
 		c.mood = mood.Lonely
+	}
+
+	if c.cat.Stolen && time.Since(c.cat.StolenTime) > cat.StealDuration {
+		tryScoopCat(c)
 	}
 }
 

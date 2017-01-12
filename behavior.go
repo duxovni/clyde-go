@@ -211,7 +211,16 @@ func watchCat(c *Clyde, r zephyr.MessageReaderResult) bool {
 	case cat.Scooped:
 		if withUs {
 			c.cat.State = cat.WeScooped
-			c.send(homeClass, homeInstance, fmt.Sprintf("Let's go over here, %s", cat.CatName))
+			if c.cat.Stolen {
+				c.send(c.cat.StolenClass, c.cat.StolenInstance, fmt.Sprintf("Thanks for visiting, %s!", cat.CatName))
+				c.cat.Stolen = false
+			} else {
+				c.send(homeClass, homeInstance, fmt.Sprintf("Let's go over here, %s", cat.CatName))
+				c.cat.Stolen = true
+				c.cat.StolenTime = time.Now()
+				c.cat.StolenClass = c.cat.Class
+				c.cat.StolenInstance = c.cat.Instance
+			}
 		} else {
 			c.cat.State = cat.Normal
 		}
@@ -225,6 +234,7 @@ func watchCat(c *Clyde, r zephyr.MessageReaderResult) bool {
 			c.cat.State = cat.WeCarrying
 		} else {
 			c.cat.State = cat.Traveling
+			c.cat.Stolen = false
 		}
 	case cat.Enter:
 		if withUs {
