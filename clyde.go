@@ -200,7 +200,14 @@ func (c *Clyde) send(class, instance, body string) {
 	}
 
 	uid := c.session.MakeUID(time.Now())
-	zsig := c.zsigChain.Generate("", 1, rand.Intn(6)+2)
+
+	var zsig string
+	if zsigUseChainer {
+		zsig = c.zsigChain.Generate("", 1, rand.Intn(6)+2)
+	} else {
+		zsig = "Clyde"
+	}
+
 	msg := &zephyr.Message{
 		Header: zephyr.Header{
 			Kind:	zephyr.ACKED,
@@ -236,6 +243,8 @@ const subsFile = "subs.json"
 
 const sender = "clyde"
 const prefixLen = 2
+
+const zsigUseChainer = false
 const zsigPrefixLen = 1 // Be more creative with less input data
 
 const sendDelayFactor = 20 // milliseconds to wait per character in a message before sending
