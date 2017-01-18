@@ -175,12 +175,8 @@ func tryPlayCat(c *Clyde) {
 }
 
 func tryScoopCat(c *Clyde) {
-	if c.cat.Class != homeClass || c.cat.Instance != homeInstance {
-		c.cat.State = cat.TryScoop
-		c.send(c.cat.Class, c.cat.Instance, cat.CatCmd("scoop"))
-	} else {
-		tryPlayCat(c)
-	}
+	c.cat.State = cat.TryScoop
+	c.send(c.cat.Class, c.cat.Instance, cat.CatCmd("scoop"))
 }
 
 // watchCat is a special behavior for interacting with the cat and
