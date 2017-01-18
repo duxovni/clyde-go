@@ -173,11 +173,14 @@ func (c *Clyde) subscribe(class string, policy classPolicy) {
 // class and instance. It delays based on the length of the message,
 // and alters the message based on Clyde's mood.
 func (c *Clyde) send(class, instance, body string) {
+	log.Printf("Sending message to -c %s -i %s: %s", class, instance, body)
+
 	time.Sleep(time.Duration(len(body))*sendDelayFactor*time.Millisecond)
 
 	body = stringutil.BreakLines(body, stringutil.MaxLine)
 
 	if rand.Intn(10) == 0 {
+		log.Printf("Tweaking message for mood %v", c.mood)
 		format := "%s"
 		breaklines := true
 		switch c.mood {
@@ -255,12 +258,15 @@ func (c *Clyde) handleMessage(r zephyr.MessageReaderResult) {
 		return
 	}
 
+	log.Printf("received message on -c %s -i %s: %s", r.Message.Header.Class, r.Message.Header.Instance, r.Message.Body[1])
+
 	c.chain.Build(strings.NewReader(r.Message.Body[1]))
 	c.zsigChain.Build(strings.NewReader(r.Message.Body[0]))
 
 	// Perform the first behavior that triggers, and exit
-	for _, b := range behaviors {
+	for i, b := range behaviors {
 		if b(c, r) {
+			log.Printf("Behavior %d triggered", i)
 			c.lastInteraction = time.Now()
 			return
 		}
@@ -270,17 +276,28 @@ func (c *Clyde) handleMessage(r zephyr.MessageReaderResult) {
 func (c *Clyde) handleTick(t time.Time) {
 	aloneDuration := time.Since(c.lastInteraction)
 
+	log.Printf("Current alone duration: %v", aloneDuration)
+
 	if aloneDuration >= time.Hour && rand.Intn(90) == 0 {
+		log.Printf("Alone for a while, sending message (current mood: %v)", c.mood)
 		var phrase string
 		switch c.mood {
 		case mood.Lonely:
 			if rand.Intn(3) == 0 {
+				log.Println("cat interaction")
 				switch c.cat.State {
 				case cat.Traveling:
+					log.Println("can't find cat")
 					c.send(homeClass, homeInstance, fmt.Sprintf("I can't find %s! :(", cat.CatName))
 					c.mood = c.mood.Worse()
 				case cat.Normal:
-					tryScoopCat(c)
+					if c.cat.Class != homeClass || c.cat.Instance != homeInstance {
+						log.Println("Trying to steal cat")
+						tryScoopCat(c)
+					} else {
+						log.Println("Trying to play with cat")
+						tryPlayCat(c)
+					}
 				}
 				return
 			} else {
@@ -296,15 +313,18 @@ func (c *Clyde) handleTick(t time.Time) {
 		}
 	}
 	if aloneDuration >= 2*time.Hour && rand.Intn(30) == 0 {
+		log.Println("getting lonely")
 		c.mood = mood.Lonely
 	}
 
 	if c.cat.Stolen && time.Since(c.cat.StolenTime) > cat.StealDuration {
+		log.Println("trying to return stolen cat")
 		tryScoopCat(c)
 	}
 }
 
 func (c *Clyde) handleShutdown() {
+	log.Println("Shutting down")
 	c.ticker.Stop()
 	c.chain.Save(c.path(chainFile))
 	c.zsigChain.Save(c.path(zsigChainFile))
