@@ -446,7 +446,12 @@ var dice = standardBehavior("( |^)(?P<count>[0-9]*)d(?P<faces>[0-9]+)",
 	[]string{"count", "faces"},
 	false,
 	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
-		count, _ := strconv.Atoi(kvs["count"])
+		var count int
+		if kvs["count"] == "" {
+			count = 1
+		} else {
+			count, _ = strconv.Atoi(kvs["count"])
+		}
 		faces, _ := strconv.Atoi(kvs["faces"])
 		total := 0
 		for i := 0; i < count; i++ {
