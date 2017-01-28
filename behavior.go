@@ -466,7 +466,7 @@ var simpleQuips = map[string]string{
 	"i've been captured": "Yay!",
 	"no, that's a bad thing": "Yay!",
 	"morse": "dit, dit dah dah",
-	"(^| )sing": "la la la",
+	"(^| )sing\\b": "la la la",
 	"what makes the grass grow": "Fertilizer, sir!",
 	"what is the meaning of life\\?": "42/3",
 	"what do you want\\?": "Never ask that question.",
