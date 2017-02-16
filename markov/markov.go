@@ -79,11 +79,12 @@ func (p Prefix) Shift(word string) {
 type Chain struct {
 	chain     map[string]map[string]int
 	prefixLen int
+	stats []int
 }
 
 // NewChain returns a new Chain with prefixes of prefixLen words.
 func NewChain(prefixLen int) *Chain {
-	return &Chain{make(map[string]map[string]int), prefixLen}
+	return &Chain{make(map[string]map[string]int), prefixLen, make([]int, prefixLen+1)}
 }
 
 // Add increments the frequency count for a suffix following each
@@ -125,6 +126,8 @@ func (c *Chain) NextWord(p Prefix) string {
 		if c.chain[key] == nil {
 			continue
 		}
+
+		c.stats[c.prefixLen-i]++
 
 		// Make a random choice weighted by frequency
 		total := 0
@@ -232,3 +235,16 @@ func (c *Chain) Save(filename string) error {
 	return nil
 }
 
+// Size returns the number of prefixes stored in the chain.
+func (c *Chain) Size() int {
+	return len(c.chain)
+}
+
+// Stats returns a histogram of what prefix lengths are being used to
+// generate words. The nth entry in the returned array holds the
+// number of words generated using length-n prefixes.
+func (c *Chain) Stats() []int {
+	retval := make([]int, len(c.stats))
+	copy(retval, c.stats)
+	return retval
+}

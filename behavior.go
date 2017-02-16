@@ -154,6 +154,8 @@ var behaviors = []behavior{
 	empathy,
 	addActLike,
 	actLike,
+	learnSecret,
+	tellSecret,
 	addSub,
 	checkSub,
 	getMood,
@@ -164,6 +166,8 @@ var behaviors = []behavior{
 	fortune,
 	dice,
 	quip,
+	memSize,
+	chainStats,
 	ping,
 	chat,
 }
@@ -323,6 +327,22 @@ var actLike = standardBehavior("clyde.? ((please )?act like (?P<person>.*[^\\.\\
 			}
 		}
 		return phrase
+	})
+
+var learnSecret = standardBehavior("clyde.*don't tell anyone,? but (?P<secret>.+)",
+	[]string{"secret"},
+	false,
+	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
+		addLine(c, "secrets", kvs["secret"])
+		return "My lips are sealed!"
+	})
+
+var tellSecret = standardBehavior("clyde.*tell me a secret",
+	[]string{},
+	false,
+	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
+		secret, _ := randomLine(c, "secrets")
+		return fmt.Sprintf("Don't tell anyone, but %s", secret)
 	})
 
 var addSub = standardBehavior("clyde.*sub(scribe)? to (me|my class|(-c )?(?P<class>[^ !\\?]+[^ !\\?\\.]))",
@@ -514,12 +534,41 @@ func quip(c *Clyde, r zephyr.MessageReaderResult) bool {
 	return false
 }
 
+var memSize = standardBehavior("how big is your memory", []string{}, false,
+	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
+		size := c.chain.Size()
+		return fmt.Sprintf("I've got %d n-gram prefixes in my memory!", size)
+	})
+
+var chainStats = standardBehavior("how('s| is) your chainer", []string{}, false,
+	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
+		stats := c.chain.Stats()
+		total := 0
+		for _, count := range stats {
+			total += count
+		}
+		if total == 0 {
+			return "My chainer is taking a nap."
+		}
+
+		var replyParts []string
+		replyParts = append(replyParts, "Well")
+		for i, count := range stats {
+			nextPart := fmt.Sprintf("%.1f%% of my words are from %d-word chains", 100.0 * float32(count) / float32(total), i+1)
+			if i == len(stats)-1 {
+				nextPart = fmt.Sprintf("and %s.", nextPart)
+			}
+			replyParts = append(replyParts, nextPart)
+		}
+		return strings.Join(replyParts, ", ")
+	})
+
 var ping = standardBehavior("^clyde\\?$", []string{}, false,
 	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
 		return "Yes?"
 	})
 
-var chat = standardBehavior("^clyde,? (?P<topic>[^ ]+)",
+var chat = standardBehavior("clyde,? (?P<topic>[^ ]+)",
 	[]string{"topic"},
 	true,
 	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {
