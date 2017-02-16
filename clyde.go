@@ -46,6 +46,7 @@ type Clyde struct {
 	subs map[string]classPolicy
 	mood mood.Mood
 	lastInteraction time.Time
+	lastSaved time.Time
 	ticker *time.Ticker
 	cat cat.Cat
 	shutdown chan struct{}
@@ -101,6 +102,7 @@ func LoadClyde(dir string) (*Clyde, error) {
 	c.mood = mood.Ok
 
 	c.lastInteraction = time.Now()
+	c.lastSaved = time.Now()
 
 	c.ticker = time.NewTicker(time.Minute)
 
@@ -275,6 +277,14 @@ func (c *Clyde) handleMessage(r zephyr.MessageReaderResult) {
 }
 
 func (c *Clyde) handleTick(t time.Time) {
+	if time.Since(c.lastSaved) > 30*time.Minute {
+		log.Println("Saving data")
+		c.chain.Save(c.path(chainFile))
+		c.zsigChain.Save(c.path(zsigChainFile))
+		c.saveSubs()
+		c.lastSaved = time.Now()
+	}
+
 	aloneDuration := time.Since(c.lastInteraction)
 
 	log.Printf("Current alone duration: %v", aloneDuration)
