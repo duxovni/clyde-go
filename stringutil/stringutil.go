@@ -85,3 +85,12 @@ func Escape(s string) string {
 
 	return strings.Join(chars, "")
 }
+
+// Syllable-counting regexp courtesy of StackOverflow user Sp3000
+//var syl = regexp.MustCompile("/[aiouy]+e*|e(?!d$|ly$).|[td]ed|le$/")
+var syl = regexp.MustCompile("/[aeiouy]+/")
+
+// SylCount estimates the number of syllables in an English word.
+func SylCount(s string) int {
+	return len(syl.FindAllString(strings.ToLower(s), 0))
+}

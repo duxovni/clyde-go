@@ -24,6 +24,7 @@ import (
 	"time"
 	"github.com/zephyr-im/zephyr-go"
 	"github.com/sdukhovni/clyde-go/stringutil"
+	"github.com/sdukhovni/clyde-go/util"
 	"github.com/sdukhovni/clyde-go/mood"
 	"github.com/sdukhovni/clyde-go/cat"
 )
@@ -44,7 +45,7 @@ type behavior func(*Clyde, zephyr.MessageReaderResult) bool
 // class.
 func standardBehavior(pattern string, keys []string, chain bool, resp func(*Clyde, zephyr.MessageReaderResult, map[string]string) string) behavior {
 	return func(c *Clyde, r zephyr.MessageReaderResult) bool {
-		body := strings.Join(strings.Fields(r.Message.Body[1]), " ") // normalize spacing for regexp matches
+		body := strings.Join(strings.Fields(util.MessageBody(r)), " ") // normalize spacing for regexp matches
 		insPattern := fmt.Sprint("(?i)", pattern)
 		rex := regexp.MustCompile(insPattern)
 		match := rex.FindStringSubmatchIndex(body)
@@ -69,7 +70,7 @@ func standardBehavior(pattern string, keys []string, chain bool, resp func(*Clyd
 			case 0, LISTEN:
 				return true
 			case REPLYHOME:
-				if !strings.HasPrefix(strings.ToLower(r.Message.Body[1]), "clyde") {
+				if !strings.HasPrefix(strings.ToLower(util.MessageBody(r)), "clyde") {
 					class = homeClass
 					instance = homeInstance
 				}
@@ -187,10 +188,13 @@ func tryScoopCat(c *Clyde) {
 // keeping track of her whereabouts.
 func watchCat(c *Clyde, r zephyr.MessageReaderResult) bool {
 	if shortSender(r) != cat.CatName {
+		log.Printf("sender was %s", shortSender(r))
 		return false
 	}
 
-	body := r.Message.Body[1]
+	log.Println("Saw cat")
+
+	body := util.MessageBody(r)
 
 	c.cat.Class = r.Message.Header.Class
 	c.cat.Instance = r.Message.Header.Instance
@@ -210,6 +214,7 @@ func watchCat(c *Clyde, r zephyr.MessageReaderResult) bool {
 		c.cat.State = cat.Normal
 	case cat.Scooped:
 		if withUs {
+			log.Println("we scooped the cat")
 			c.cat.State = cat.WeScooped
 			if c.cat.Stolen {
 				c.send(c.cat.StolenClass, c.cat.StolenInstance, fmt.Sprintf("Thanks for visiting, %s!", cat.CatName))
@@ -222,6 +227,7 @@ func watchCat(c *Clyde, r zephyr.MessageReaderResult) bool {
 				c.cat.StolenInstance = c.cat.Instance
 			}
 		} else {
+			log.Println("someone else scooped the cat")
 			c.cat.State = cat.Normal
 		}
 	case cat.ScoopFailed:
@@ -251,7 +257,7 @@ func watchCat(c *Clyde, r zephyr.MessageReaderResult) bool {
 		}
 	case cat.Bored:
 		c.cat.State = cat.Normal
-		if time.Since(c.lastInteraction) > time.Hour {
+		if time.Since(c.lastInteraction) > time.Hour && rand.Intn(2) == 0 {
 			switch rand.Intn(8) {
 			case 0:
 				tryScoopCat(c)
@@ -274,12 +280,12 @@ func watchCat(c *Clyde, r zephyr.MessageReaderResult) bool {
 // always returns false.
 func empathy(c *Clyde, r zephyr.MessageReaderResult) bool {
 	rex := regexp.MustCompile("(?i)(?P<emote>:[\\(\\)D3]|;\\(|:,\\(|happy|smile|laugh|sad|frown|cry)")
-	match := rex.FindStringSubmatchIndex(r.Message.Body[1])
+	match := rex.FindStringSubmatchIndex(util.MessageBody(r))
 	if match == nil {
 		return false
 	}
 
-	emote := string(rex.ExpandString([]byte(""), "$emote", r.Message.Body[1], match))
+	emote := string(rex.ExpandString([]byte(""), "$emote", util.MessageBody(r), match))
 
 	switch emote {
 	case ":D", ":3", "laugh":
@@ -469,6 +475,9 @@ var dice = standardBehavior("( |^)(?P<count>[0-9]*)d(?P<faces>[0-9]+)",
 			count, _ = strconv.Atoi(kvs["count"])
 		}
 		faces, _ := strconv.Atoi(kvs["faces"])
+		if faces == 0 {
+			return "0"
+		}
 		total := 0
 		for i := 0; i < count; i++ {
 			total += rand.Intn(faces) + 1
@@ -503,7 +512,7 @@ var fileQuips = map[string]string{
 	"(^| )ai[ ,\\.\\?]": "ai",
 	"[\\*:](tickles?|poke)[\\*:]": "tickle",
 	"what('| i)s wrong\\?": "wrong",
-	"thank(s| you)": "welcome",
+	"clyde.*thank(s| you)|thank(s| you).*clyde": "welcome",
 	"bye": "bye",
 	"(good ?|')night": "night",
 	"how do you like": "howlike",
@@ -568,7 +577,7 @@ var ping = standardBehavior("^clyde\\?$", []string{}, false,
 		return "Yes?"
 	})
 
-var chat = standardBehavior("clyde,? (?P<topic>[^ ]+)",
+var chat = standardBehavior("clyde,? (tell me about )?(?P<topic>[^ ]+)",
 	[]string{"topic"},
 	true,
 	func(c *Clyde, r zephyr.MessageReaderResult, kvs map[string]string) string {

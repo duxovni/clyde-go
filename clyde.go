@@ -32,6 +32,7 @@ import (
 	"github.com/sdukhovni/clyde-go/mood"
 	"github.com/sdukhovni/clyde-go/cat"
 	"github.com/sdukhovni/clyde-go/stringutil"
+	"github.com/sdukhovni/clyde-go/util"
 )
 
 // Clyde (the struct) holds all of the internal state needed for Clyde
@@ -175,11 +176,15 @@ func (c *Clyde) subscribe(class string, policy classPolicy) {
 // class and instance. It delays based on the length of the message,
 // and alters the message based on Clyde's mood.
 func (c *Clyde) send(class, instance, body string) {
+	preformatted := false
+
 	log.Printf("Sending message to -c %s -i %s: %s", class, instance, body)
 
 	time.Sleep(time.Duration(len(body))*sendDelayFactor*time.Millisecond)
 
-	body = stringutil.BreakLines(body, stringutil.MaxLine)
+	if !preformatted {
+		body = stringutil.BreakLines(body, stringutil.MaxLine)
+	}
 
 	if rand.Intn(10) == 0 {
 		log.Printf("Tweaking message for mood %v", c.mood)
@@ -199,7 +204,7 @@ func (c *Clyde) send(class, instance, body string) {
 			format = "*bounce* %s"
 		}
 		body = fmt.Sprintf(format, body)
-		if breaklines {
+		if breaklines && !preformatted {
 			body = stringutil.BreakLines(body, stringutil.MaxLine)
 		}
 	}
@@ -261,10 +266,10 @@ func (c *Clyde) handleMessage(r zephyr.MessageReaderResult) {
 		return
 	}
 
-	log.Printf("received message on -c %s -i %s: %s", r.Message.Header.Class, r.Message.Header.Instance, r.Message.Body[1])
+	log.Printf("received message on -c %s -i %s: %s", r.Message.Header.Class, r.Message.Header.Instance, util.MessageBody(r))
 
-	c.chain.Build(strings.NewReader(r.Message.Body[1]))
-	c.zsigChain.Build(strings.NewReader(r.Message.Body[0]))
+	c.chain.Build(strings.NewReader(util.MessageBody(r)))
+	c.zsigChain.Build(strings.NewReader(util.MessageZSig(r)))
 
 	// Perform the first behavior that triggers, and exit
 	for i, b := range behaviors {
@@ -294,7 +299,7 @@ func (c *Clyde) handleTick(t time.Time) {
 		var phrase string
 		switch c.mood {
 		case mood.Lonely:
-			if rand.Intn(3) == 0 {
+			if rand.Intn(6) == 0 {
 				log.Println("cat interaction")
 				switch c.cat.State {
 				case cat.Traveling:

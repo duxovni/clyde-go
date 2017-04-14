@@ -60,7 +60,7 @@ const StealDuration = 30*time.Minute
 
 var ActionPatterns = map[CatAction]string {
 	React: "((bats|scratches) at|rubs up against|snuggles up to|looks at) (?P<user>\\w*)|slips out of (?P<user>\\w*)'s arms|(?P<user>) (squeezes|boops)|purrs|meows|is confused",
-	Scooped: "(?P<user>\\w*) scoops",
+	Scooped: "(?P<user>\\w*) (scoops|is already)",
 	ScoopFailed: "slips out of (?P<user>\\w*)'s grip",
 	Leave: "carried away by (?P<user>\\w*)",
 	Enter: "(?P<user>\\w*) carries",
