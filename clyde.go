@@ -266,6 +266,11 @@ func (c *Clyde) handleMessage(r zephyr.MessageReaderResult) {
 		return
 	}
 
+	// Ignore pti messages
+	if strings.HasSuffix(r.Message.Header.Instance, "pti") {
+		return
+	}
+
 	log.Printf("received message on -c %s -i %s: %s", r.Message.Header.Class, r.Message.Header.Instance, util.MessageBody(r))
 
 	c.chain.Build(strings.NewReader(util.MessageBody(r)))
